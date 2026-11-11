@@ -1,0 +1,342 @@
+---
+title: 5. Add people
+description: Give the teacher his sign-in, add two staff members, admit four students and place them in Grade 1, add a parent linked to her child, and make one staff member the school's Accountant.
+---
+
+import { Aside, Steps, Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+import Pipeline from '../../../components/Pipeline.astro';
+import SourceFile from '../../../components/SourceFile.astro';
+import Api from '../../../components/Api.astro';
+import Perm from '../../../components/Perm.astro';
+import Roles from '../../../components/Roles.astro';
+import Route from '../../../components/Route.astro';
+import Screenshot from '../../../components/Screenshot.astro';
+
+A school is its people. In this chapter Laila fills Sunrise Academy: the
+teacher she added in the last chapter sets his password, two office staff join,
+four children are admitted and placed in Grade 1, one child's mother gets a
+parent sign-in, and the office's accountant gets the **Accountant** role so he
+can run fees and payroll.
+
+Two ideas matter here:
+
+- **A person record and a sign-in are different things.** Teachers always get
+  a sign-in. Staff and parents get one only if you give them an email. Every
+  new sign-in is emailed a link to set its own password. Students
+  added on the Students page get none (see the portals chapter).
+- **Admitting is not placing.** A student record says who the child is; an
+  *enrollment* puts them in a section for the year, which is what puts them on
+  a register, in the gradebook and on a fee run.
+
+## What you'll do
+
+- Set Omar Farouk's password from his set-password link.
+- Add staff **Priya Das** (Office Manager) and **Ethan Brooks** (Accountant).
+- Admit **Aisha Khan**, **Leo Martins**, **Mia Chen** and **Noah Patel**, and
+  place them in Grade 1 · A and B with roll numbers.
+- Add **Sara Khan**, Aisha's mother, with a parent sign-in.
+- Give Ethan the **Accountant** role on **Members & roles**.
+
+## Before you start
+
+- **Owner** profile: signed in as `owner@sunrise.example`.
+- Grade 1 with sections A and B exists, led by Omar ([chapter 4](/tutorial/set-up-academics/)).
+
+<Pipeline
+  caption="Who gets a sign-in, and how."
+  steps={[
+    { label: 'Teacher', icon: 'mail', note: 'Set-password email' },
+    { label: 'Staff', icon: 'key', note: 'Email given: set-password email' },
+    { label: 'Parent', icon: 'users', note: 'Email given: set-password email' },
+    { label: 'Password', icon: 'log-in', note: 'Each sets their own' },
+    { label: 'Roles', icon: 'shield', note: 'Members & roles' },
+  ]}
+/>
+
+## Steps
+
+### 1. Omar sets his password
+
+<Steps>
+
+1. Omar opens the email **"Set your Schola password for Sunrise Academy"**. It
+   says he has been added to Sunrise Academy on Schola as a teacher, names his
+   sign-in email, and has a **Set password** button. The link opens
+   <Route path="/reset-password" /> with a one-time token.
+   With the console transport, copy the link from the API log line
+   `[email/console] would have sent email`.
+
+2. The page is titled **Set a new password** — "Choose a strong password — at
+   least 8 characters, with upper, lower, and a digit." Type **New password**
+   `Schola@2026`.
+
+   <Screenshot name="tutorial-teacher-set-password" alt="The Set a new password page with a Strong password typed" path="/reset-password?token=…" />
+
+3. Click **Save new password**. The toast says **"Password updated. Please
+   log in."** and you land on <Route path="/login" />. Setting the password also
+   marks Omar's email as verified.
+
+</Steps>
+
+<Aside type="note" title="How long the link lasts">
+The email says "This link expires in 24 hours and works once." That is
+`PASSWORD_RESET_TTL_MIN` × 24 minutes (60 × 24 by default) — longer than a
+"Forgot password" link, because nobody asked for this one and it may sit
+unread for a while. If it runs out, **Forgot?** on the sign-in page sends a
+fresh link.
+</Aside>
+
+<Aside type="caution" title="No email arrived?">
+In the run behind this page the email provider could not deliver to
+`teacher@sunrise.example` (see [chapter 2](/tutorial/register-a-school/)), so
+no link existed. Adding Omar still succeeded — the invite is best-effort — and
+the run stood in for the email by creating a one-time `password_reset` token
+for that test account and opening the same `/reset-password?token=…` page.
+With the console transport you never need this — the link is in the API log.
+</Aside>
+
+### 2. Add the office staff
+
+<Steps>
+
+1. Click **Staff** under **People**, then **Add staff member**.
+
+2. Fill in Priya's record:
+
+   | Field | Value |
+   |---|---|
+   | Employee ID | `SUN-S001` |
+   | Email (optional) | `staff@sunrise.example` — "With an email they get a staff sign-in and an email to set a password." |
+   | First name / Last name | `Priya` / `Das` |
+   | Designation (optional) | `Office Manager` |
+   | Department (optional) | `Administration` |
+   | Phone (optional) | `+1 555 0170` |
+   | Joined (optional) | `08/01/2026` |
+
+   <Screenshot name="tutorial-staff-form" alt="The New staff member drawer for Priya Das, Office Manager" path="/app/staff" />
+
+3. Click **Add staff member**. The toast says **"Staff member added — they'll
+   get an email to set a password."**
+
+4. Repeat for Ethan: **Employee ID** `SUN-S002`, **Email**
+   `accountant@sunrise.example`, `Ethan` `Brooks`, **Designation**
+   `Accountant`, **Department** `Finance`, **Phone** `+1 555 0171`.
+
+   <Screenshot name="tutorial-staff-list" alt="The Staff list with Ethan Brooks (Accountant, Finance) and Priya Das (Office Manager, Administration)" path="/app/staff" />
+
+</Steps>
+
+Each staff member with an email gets the same kind of set-password email as
+Omar ("You've been added to Sunrise Academy on Schola as a staff member"). A
+staff member without an email gets no sign-in and no email.
+
+### 3. Admit the students
+
+<Steps>
+
+1. Click **Students**, then **Add student**. The **New student** drawer has
+   two parts: **Student** and **Class placement**.
+
+2. Admit Aisha without a class for now:
+
+   | Field | Value |
+   |---|---|
+   | Admission number | `SUN-2026-001` |
+   | Gender | **Female** |
+   | First name / Last name | `Aisha` / `Khan` |
+   | Date of birth (optional) | `03/14/2020` |
+   | Phone (optional) | `+1 555 0160` |
+   | Address (optional) | `12 Orchard Lane, Springfield` |
+   | Class | **Not yet** |
+
+   Click **Add student** — **"Student added."** Do the same for Mia:
+   `SUN-2026-003`, **Female**, `Mia` `Chen`, date of birth `01/21/2020`.
+
+3. Now admit and place in one go. Click **Add student** for Leo:
+   `SUN-2026-002`, **Male**, `Leo` `Martins`, date of birth `06/02/2020`. Under
+   **Class placement** pick **Class** **Grade 1**; the **Section** picker
+   unlocks and shows seats taken, such as "A (0/30)". Pick **A** and type
+   **Roll number (optional)** `2`. Click **Add student** — **"Student added
+   and enrolled."**
+
+4. Do the same for Noah: `SUN-2026-004`, **Male**, `Noah` `Patel`, date of
+   birth `09/30/2020`, phone `+1 555 0165`, address `8 Maple Court,
+   Springfield`, **Grade 1**, section **B**, roll `2`.
+
+   <Screenshot name="tutorial-student-form-placement" alt="The New student drawer for Noah Patel, placed in Grade 1 section B with roll number 2" path="/app/students" />
+
+   The note under the fields says "Phone, date of birth, and address are stored
+   encrypted."
+
+</Steps>
+
+### 4. Place the other two from the class page
+
+<Steps>
+
+1. Open **Classes & sections › Grade 1**. **Section A** is selected; its card
+   reads "Section A — students".
+
+2. Click **Enroll students**. The drawer "Enroll into Grade 1 · A" says how
+   many seats are left and lists only students without a class this year.
+   Tick **Aisha Khan** and click **Enroll 1 student** — **"Enrolled 1 student
+   in Grade 1 · A."**
+
+3. Click **Section B** in the Sections table, then **Enroll students**, tick
+   **Mia Chen** and click **Enroll 1 student**.
+
+   <Screenshot name="tutorial-enroll-students" alt="The Enroll into Grade 1 · B drawer with Mia Chen ticked" path="/app/classes/…" />
+
+4. Give them roll numbers. In Section A's roster, open Aisha's row menu (**⋯**)
+   and choose **Move or set roll no.** The "Move Aisha Khan" box ("Change the
+   section or roll number for this academic year.") has **Section** and
+   **Roll number** ("Optional. Orders the attendance register."). Type `1` and
+   click **Save** — **"Enrollment updated."** Do the same for Mia in Section B.
+
+   <Screenshot name="tutorial-roster-move" alt="The Move Aisha Khan box with Section and Roll number" path="/app/classes/…" />
+
+5. Open **Students**. All four now show their class: Aisha "Grade 1 · A #1",
+   Leo "Grade 1 · A #2", Mia "Grade 1 · B #1" and Noah "Grade 1 · B #2".
+
+   <Screenshot name="tutorial-students-list" alt="The Students list: four students, each with class, section and roll number" path="/app/students" />
+
+</Steps>
+
+<Aside type="caution" title="&quot;Edit / change class&quot; failed for a student with personal details">
+The Students row menu also offers **Edit / change class**, which can place a
+student. In this run, saving it for Aisha (who has a phone, date of birth and
+address) failed twice with **"Something went wrong."** —
+<Api method="PATCH" path="students/:id" perm="student:update" /> answered `500`,
+and nothing changed. The class page's **Enroll students** and **Move or set
+roll no.** worked, so use them.
+</Aside>
+
+### 5. Add Aisha's mother
+
+<Steps>
+
+1. Click **Parents**, then **Add parent**.
+
+2. Fill it in:
+
+   | Field | Value |
+   |---|---|
+   | First name / Last name | `Sara` / `Khan` |
+   | Relation | **Mother** (the others are Father, Guardian, Other) |
+   | Occupation (optional) | `Architect` |
+   | Phone (optional) | `+1 555 0161` |
+   | Email (optional) | `parent@sunrise.example` — "With an email they get a parent sign-in and an email to set a password." |
+   | Address (optional) | `12 Orchard Lane, Springfield` |
+   | Children at this school | type `Khan` in **Search students**, tick **Aisha Khan** |
+
+   <Screenshot name="tutorial-parent-form" alt="The New parent drawer for Sara Khan with Aisha Khan picked as her child" path="/app/parents" />
+
+3. Click **Add parent** — **"Parent added — they'll get an email to set a
+   password."** The list shows Sara as **Mother** of **Aisha Khan**, and Sara
+   gets a set-password email "as a parent".
+
+</Steps>
+
+If the email already belongs to an account, Schola links that account to the
+parent record instead of creating one, and sends no email — that person
+already has a way to sign in.
+
+### 6. Make Ethan the Accountant
+
+<Steps>
+
+1. Click **Members & roles** under **Administration**. "Everyone with a
+   sign-in at this school. Give staff the principal, vice principal or
+   accountant role here." Five members are listed: Ethan Brooks (**Staff**),
+   Laila Rahman (you, **School admin · owner**), Omar Farouk (**Teacher**),
+   Priya Das (**Staff**) and Sara Khan (**Parent**).
+
+   <Screenshot name="tutorial-members-list" alt="Members & roles with five members and an Add role picker on each row" path="/app/members" />
+
+2. On Ethan's row, set the **Add role** picker to **Accountant** and click
+   **Add**. The toast says **"Role added."** and his **Roles** now read
+   **Staff** and **Accountant**.
+
+   <Screenshot name="tutorial-members-after-grant" alt="Ethan Brooks now holding the Staff and Accountant roles" path="/app/members" />
+
+3. To make someone **Principal** or **Vice principal**, use the same picker.
+   The School Admin role is not offered — it moves only through **School
+   settings › Transfer admin role**.
+
+</Steps>
+
+### 7. Staff and parents set their password
+
+<Steps>
+
+1. In the person's own browser profile, open their email **"Set your Schola
+   password for Sunrise Academy"** and click **Set password** — or, with the
+   console transport, copy the link from the API log.
+
+2. Set `Schola@2026` on **Set a new password**, as Omar did, and click **Save
+   new password**.
+
+3. Repeat for `accountant@sunrise.example` and `parent@sunrise.example`.
+
+</Steps>
+
+If a link has run out or never arrived, use **Forgot?** next to **Password**
+on <Route path="/login" />: type the email on **Reset your password** and click
+**Send reset link**. The page always answers the same way — "If that email is
+registered, you'll receive a reset link shortly." — whether or not the email
+could be delivered, so it never reveals which addresses have accounts. The
+**"Reset your Schola password"** link is valid for `PASSWORD_RESET_TTL_MIN`
+minutes (1 hour by default).
+
+<Screenshot name="tutorial-forgot-password" alt="The Reset your password page with staff@sunrise.example typed" path="/forgot-password" />
+
+<Aside type="caution" title="Testing with a real provider">
+With a real provider and `*.example` addresses nothing is delivered, so there
+is no link to click. In the run behind this page the same stand-in as for Omar
+(a one-time `password_reset` token opened on `/reset-password`) was used for
+the three accounts.
+</Aside>
+
+## Check your work
+
+- The dashboard shows **Students 4** and **Teachers 1**, and the checklist has
+  only **Take today's attendance** left.
+- <Route path="/app/teachers" /> shows Omar leading "Grade 1 (class teacher),
+  Grade 1 · A, Grade 1 · B".
+- Each of `teacher@`, `staff@`, `accountant@` and `parent@sunrise.example`
+  signs in with `Schola@2026`. Ethan's sidebar has **Fees** and **Payroll**;
+  Sara's has **My children**.
+
+## If something goes wrong
+
+- **"Another record already uses this admission number."** — admission numbers
+  are unique in the school.
+- **"A user with this email already exists."** — that email already has an
+  account (teachers and staff need a new one). Use a different email, or ask a
+  Super Admin to give the existing account a role.
+- **A section is greyed out with "— full"** — it has reached its capacity.
+- **"This is their only role here. Give them another role first, or remove
+  them from People."** — you tried to remove someone's last role on Members &
+  roles.
+
+## Under the hood
+
+- <SourceFile path="apps/api/src/modules/people/staff.routes.ts" /> and <SourceFile path="apps/api/src/modules/people/parents.routes.ts" /> — accounts are created when an email is given, then sent a set-password invite.
+- <SourceFile path="apps/api/src/services/account-invite.ts" /> — the best-effort invite: a 24-hour `password_reset` token and the `accountInviteTemplate` email; a failure is logged and recorded as `inviteEmail: "failed"` on the audit entry.
+- <SourceFile path="apps/web/src/components/school/enroll-students.tsx" /> — the class page's enroll drawer.
+- <SourceFile path="apps/api/src/modules/members/members.routes.ts" /> — granting and removing roles (`user_role.grant` / `user_role.revoke` in the audit log).
+- <Api method="POST" path="students" perm="student:create" /> · <Api method="POST" path="enrollments" perm="student:create" /> · <Api method="POST" path="parents" /> · <Api method="POST" path="staff" /> · <Api method="POST" path="members/:id/roles" />
+
+## Learn more
+
+<CardGrid>
+  <LinkCard title="Students" description="Admission, placement and the student profile." href="/features/people/students/" />
+  <LinkCard title="Parents" description="Linking parents and children." href="/features/people/parents/" />
+  <LinkCard title="Teachers" description="Teacher records and their sign-ins." href="/features/people/teachers/" />
+  <LinkCard title="Staff" description="Non-teaching staff records." href="/features/people/staff/" />
+  <LinkCard title="Members and roles" description="Granting Principal, Vice Principal and Accountant." href="/features/school/members-and-roles/" />
+</CardGrid>
+
+## Next
+
+<LinkCard title="6. Run a school day" description="Build the timetable, take the registers, write a remark and decide a leave request." href="/tutorial/run-a-school-day/" />

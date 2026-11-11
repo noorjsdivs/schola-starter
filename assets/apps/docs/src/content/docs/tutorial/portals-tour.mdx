@@ -1,0 +1,216 @@
+---
+title: 10. Tour the portals
+description: Sign in as the teacher, a student, the parent and a staff member to see what each of them gets from everything you set up — and why the student tour borrows a demo account.
+---
+
+import { Aside, Steps, Card, CardGrid, LinkCard, Tabs, TabItem } from '@astrojs/starlight/components';
+import Pipeline from '../../../components/Pipeline.astro';
+import SourceFile from '../../../components/SourceFile.astro';
+import Roles from '../../../components/Roles.astro';
+import Route from '../../../components/Route.astro';
+import DemoLogin from '../../../components/DemoLogin.astro';
+import Screenshot from '../../../components/Screenshot.astro';
+
+Everything so far was done from the school's side. This chapter looks at
+Sunrise Academy through the eyes of the people it serves. They all use the
+same address, <Route path="/app" />, but each sees a *member dashboard* and a
+sidebar cut down to their own permissions — nobody sees a menu item they cannot
+use.
+
+## What you'll do
+
+<Pipeline
+  caption="Four people, four views of the same school."
+  steps={[
+    { label: 'Teacher', icon: 'graduation-cap', note: 'Omar Farouk' },
+    { label: 'Student', icon: 'user', note: 'Demo: Adam Singh' },
+    { label: 'Parent', icon: 'users', note: 'Sara Khan' },
+    { label: 'Staff', icon: 'id-card', note: 'Priya Das' },
+  ]}
+/>
+
+## Before you start
+
+| Browser profile | Email | Who |
+|---|---|---|
+| **Teacher** | `teacher@sunrise.example` | Omar Farouk |
+| spare profile | `student@greenfield.example` | Adam Singh (demo school) |
+| **Family** | `parent@sunrise.example` | Sara Khan |
+| spare profile | `staff@sunrise.example` | Priya Das |
+
+All passwords are `Schola@2026`.
+
+## Steps
+
+### 1. The teacher
+
+<Steps>
+
+1. Sign in as `teacher@sunrise.example`. **Welcome, Omar.** — "Your day at
+   Sunrise Academy." The tiles show **My sections 2**, **Students 4** and
+   **Registers to take 0** ("All marked"). **My sections** lists Grade 1 ·
+   Section A and B, each "Marked today" with a **Register** button. **My
+   work** shows today's own attendance (**Present**), **This month** "1 / 1"
+   and the **Latest payslip** "$3,250.00 · November 2026 · paid".
+
+   <Screenshot name="tutorial-teacher-dashboard" alt="Omar's dashboard: two sections marked today and his paid November payslip" path="/app" />
+
+2. The sidebar starts with **My school**: **My classes**, **My attendance**
+   and **My payslips**. Below come read-only **School setup** and **Students**,
+   then **Timetable**, **Leave**, **Student attendance**, **Exams**,
+   **Gradebook**, **Remarks** and **Library**. There is no Fees, Payroll,
+   Members or Settings.
+
+3. Click **My classes** — "Sections you teach or lead as class teacher." Each
+   card ("Grade 1 · Section A · 2 of 30 seats · Omar Farouk") has
+   **Register**, **Marks** and **Remarks** shortcuts.
+
+   <Screenshot name="tutorial-teacher-my-classes" alt="My classes: Grade 1 sections A and B with Register, Marks and Remarks" path="/app/my/classes" />
+
+4. Click **Timetable**. The **My week** tab — "Every period you teach, across
+   your sections." — shows Monday and Tuesday P1 to P3 labelled "Grade 1 · A ·
+   Room 101". The **Sections** tab shows any one section's week.
+
+   <Screenshot name="tutorial-teacher-timetable" alt="Omar's week across his sections" path="/app/timetable" />
+
+5. Click **My payslips** — "Monthly pay with a PDF for each month." November
+   2026, `PAY-202611-E77A88`, $3,250.00, **Paid**, Nov 7, 2026, and a **PDF**
+   link.
+
+   <Screenshot name="tutorial-teacher-my-payslips" alt="Omar's payslips with November paid" path="/app/my/payslips" />
+
+</Steps>
+
+### 2. The student
+
+<Aside type="note" title="Why this step uses the demo school">
+A student sign-in needs a user account linked to the student record, and as of
+this writing nothing in the web app creates one: the **New student** form has
+no email field, **Members & roles** only adds roles to people who already
+sign in, and no other screen links a student to an account. Only `pnpm seed`
+does, for one demo student. So Aisha, Leo, Mia and Noah cannot sign in, and
+this step uses **Adam Singh** (`student@greenfield.example`, Grade 8 · A at
+Greenfield International School) to show the student portal.
+</Aside>
+
+<Steps>
+
+1. In a spare profile, sign in as `student@greenfield.example`. **Welcome,
+   Adam.** — "Your day at Greenfield International School." **My progress**
+   shows **Today** (Present), his class, **Attendance this year**, his
+   **Latest exam** (Term 1 — Midterm with its grade) and **Fees due**, then
+   tabs for **Attendance**, **Grades** and **Fees**, and his bus, hostel room
+   and library books.
+
+   <Screenshot name="tutorial-student-dashboard" alt="Adam Singh's student dashboard at Greenfield" path="/app" />
+
+2. The sidebar has **My attendance**, **My grades**, **My fees**,
+   **Timetable**, **Leave** and **Library** — nothing about other students.
+
+3. Click **My grades** — "Marks for every exam, with a report card to
+   download." Each exam card lists the subjects with marks, percentage and
+   grade, and has a **Report card** button — the same PDF you downloaded for
+   Aisha in [chapter 7](/tutorial/exams-and-report-cards/).
+
+   <Screenshot name="tutorial-student-my-grades" alt="Adam's grades for Term 1 — Midterm with the Report card button" path="/app/my/grades" />
+
+4. **My fees** lists his invoices and, for any balance, **Pay online** — the
+   same Stripe Checkout as the parent's.
+
+</Steps>
+
+<DemoLogin as="Student" email="student@greenfield.example" go="/app/my/grades" />
+
+### 3. The parent
+
+<Steps>
+
+1. In the **Family** profile, sign in as `parent@sunrise.example`. **Welcome,
+   Sara.** — "Your day at Sunrise Academy." **My children** shows one card:
+   **Aisha Khan**, Grade 1 · Section A, **Today** Present, **Attendance** 100%
+   and **Fees due** $310.00 (or $0.00 if you completed the Stripe payment).
+
+   <Screenshot name="tutorial-parent-dashboard" alt="Sara's dashboard with Aisha's card: present today, 100% attendance, $310 due" path="/app" />
+
+2. The sidebar is short: **My children**, **Timetable**, **Leave**,
+   **Notifications** and **My profile**.
+
+3. Click **My children › Aisha Khan**. The header reads "Grade 1 · Section A ·
+   Roll 1 · Admission SUN-2026-001". There are four tabs — **Attendance**,
+   **Grades**, **Remarks**, **Fees** — and a **Bus, room & library** card
+   ("Doesn't take the school bus", "Day student", "No library books out").
+
+4. Open **Grades** — Term 1 Midterm with 91.7% and the **Report card** button.
+
+   <Screenshot name="tutorial-parent-child-grades" alt="Sara's view of Aisha's Term 1 Midterm grades" path="/app/children/…?tab=grades" />
+
+5. Open **Remarks** — "Notes from teachers and school staff." Omar's
+   **academic** remark is there, signed "Omar Farouk · Nov 7, 2026", because he
+   set its visibility to **Parent**. Private remarks never appear here.
+
+   <Screenshot name="tutorial-parent-child-remarks" alt="Omar's remark about Aisha, visible to her mother" path="/app/children/…?tab=remarks" />
+
+6. Open **Attendance** — a month calendar with today marked **P** (present)
+   and the totals **Present**, **Absent** and **Late / Excused**.
+
+   <Screenshot name="tutorial-parent-child-attendance" alt="Sara's view of Aisha's attendance calendar for November" path="/app/children/…?tab=attendance" />
+
+</Steps>
+
+### 4. The staff member
+
+<Steps>
+
+1. In a spare profile, sign in as `staff@sunrise.example`. **Welcome,
+   Priya.** **My work** shows **Today** Present, **This month** "1 / 1" and
+   the **Latest payslip** "$2,300.00 · November 2026 · pending".
+
+   <Screenshot name="tutorial-staff-dashboard" alt="Priya's staff dashboard with her pending November payslip" path="/app" />
+
+2. Her sidebar has **My attendance**, **My payslips**, **Leave** and
+   **Library** — no student or class pages at all.
+
+3. **My attendance** — "Your record, one month at a time." — shows 100% with
+   today present. **My payslips** shows November **Pending** with a **PDF**.
+
+   <Screenshot name="tutorial-staff-my-payslips" alt="Priya's payslips: November pending" path="/app/my/payslips" />
+
+4. **Leave** lets her ask for time off for herself; Laila decides it on the
+   same Approvals list you used in [chapter 6](/tutorial/run-a-school-day/).
+
+</Steps>
+
+:::tip[Show the dark theme once]
+Click the moon button in the top bar on any portal to switch to the dark
+theme. The choice is remembered per browser.
+:::
+
+## Check your work
+
+<Roles list={['teacher']} note="sees own sections, registers, marks, remarks and pay" />
+<Roles list={['student']} note="sees only their own attendance, grades and fees" />
+<Roles list={['parent']} note="sees each linked child, and remarks marked Parent or Public" />
+<Roles list={['staff']} note="sees own attendance, payslips and leave" />
+
+## If something goes wrong
+
+- **A parent sees no children** — link the child on the Parents page (edit the
+  parent, **Children at this school**).
+- **A teacher's dashboard says there are no sections** — make them the class
+  teacher or a section teacher on the class page.
+- **Ethan (Accountant) lands on the school dashboard, not a member
+  dashboard** — that is expected: roles that can read the school profile get
+  the school dashboard.
+
+## Learn more
+
+<CardGrid>
+  <LinkCard title="Teacher portal" description="Every screen a teacher uses." href="/features/portals/teacher/" />
+  <LinkCard title="Student portal" description="My attendance, grades and fees." href="/features/portals/student/" />
+  <LinkCard title="Parent portal" description="My children and each child's record." href="/features/portals/parent/" />
+  <LinkCard title="Staff portal" description="Own attendance, payslips and leave." href="/features/portals/staff/" />
+</CardGrid>
+
+## Next
+
+<LinkCard title="11. Reports, audit and clean-up" description="Reports and CSV exports, both audit logs, and how to remove Sunrise Academy afterwards." href="/tutorial/reports-and-audit/" />

@@ -1,0 +1,354 @@
+---
+title: MongoDB
+description: Run MongoDB locally or on Atlas, point MONGODB_URI at it, and understand how Schola connects, builds indexes and keeps backups.
+---
+
+import { Aside, Steps, Tabs, TabItem, Card, CardGrid, LinkCard, Badge } from '@astrojs/starlight/components';
+import Pipeline from '../../../../components/Pipeline.astro';
+import SourceFile from '../../../../components/SourceFile.astro';
+import Api from '../../../../components/Api.astro';
+import Route from '../../../../components/Route.astro';
+
+MongoDB is the main database behind Schola. Every school record lives here:
+schools, people, classes, attendance, exams, grades, fees, payroll, the
+timetable, the audit log and every sign-in account. All schools
+([tenants](/start-here/glossary/#tenant)) share one database. A `schoolId` field on each record keeps one school's data apart from
+another's (see [Multi-tenancy](/architecture/multi-tenancy/)). Schola talks to
+MongoDB through **Mongoose**, an object-document mapper (a library that turns
+JavaScript objects into database documents and back).
+
+You need exactly one value to connect: the connection string in
+`MONGODB_URI`. This page shows two ways to get one — a local server for
+development, or a hosted cluster on MongoDB Atlas — and then explains what
+Schola does with it.
+
+## At a glance
+
+<CardGrid>
+  <Card title="Environment variable" icon="setting">
+    `MONGODB_URI` — read by the API, the demo seed and the operator jobs.
+  </Card>
+  <Card title="Required?" icon="warning">
+    <Badge text="Always" variant="danger" /> The API does not start without a
+    reachable database. In development it defaults to
+    `mongodb://localhost:27017/schola`.
+  </Card>
+  <Card title="Server version" icon="server">
+    MongoDB **8.x**. CI runs the `mongo:8` Docker image. No replica
+    set is needed — Schola uses no multi-document transactions.
+  </Card>
+  <Card title="Library" icon="database">
+    Mongoose 9, models in `packages/db/src/models`, shared by the API and the
+    seed.
+  </Card>
+</CardGrid>
+
+## Why Schola uses MongoDB
+
+- **School data is document-shaped.** A fee invoice carries its own lines, a
+  salary record its own components, an encrypted phone number its own key
+  material. Documents store these without join tables.
+- **One database, many schools.** Every tenant collection has a required,
+  indexed `schoolId`, and every query goes through `withTenant`, which adds
+  it. Scaling out later means sharding on `schoolId`, not redesigning tables.
+- **Easy to run anywhere.** A single `mongod` (or one Docker container) is
+  enough for development; Atlas gives production backups and monitoring.
+
+## What happens without it
+
+There is no fallback. If MongoDB is down or `MONGODB_URI` is wrong:
+
+| What you run | What you see |
+|---|---|
+| `pnpm --filter @schola/api dev` | The API logs `failed to start` and exits. Mongoose waits about 30 seconds for a server before giving up. |
+| `pnpm seed` | `Seed failed: …` after up to 10 seconds (the seed sets a shorter timeout). |
+| The web app | Pages load, but every API call fails, so sign-in shows an error. |
+
+## How Schola connects
+
+<Pipeline
+  caption="What happens when the API boots. The seed and the operator jobs follow the same first three steps."
+  steps={[
+    { label: 'Load env files', icon: 'file-text', note: 'test.env, then .env' },
+    { label: 'Validate', icon: 'shield', note: 'loadServerEnv() with Zod' },
+    { label: 'Connect', icon: 'database', note: 'connectDb(MONGODB_URI)' },
+    { label: 'Sync roles', icon: 'key', note: 'Permissions and role grants' },
+    { label: 'Listen', icon: 'server', note: 'Port 8000' },
+  ]}
+/>
+
+1. `apps/api/src/load-env.ts` loads `test.env` and then `.env` from the repo
+   root (in production: `apps/api/.env.production.local`, then
+   `apps/api/.env.production`). The first file that defines a key wins, and
+   variables already set by the host win over every file.
+2. `loadServerEnv()` validates every key with Zod. `MONGODB_URI` defaults to
+   `mongodb://localhost:27017/schola`, but in production the loader refuses to
+   start unless you set it explicitly.
+3. `connectDb()` in `packages/db/src/connection.ts` opens one shared
+   connection. It turns on `strictQuery` (unknown filter fields are dropped)
+   and sets `autoIndex` to **on outside production, off in production**. A
+   second call while the first is still connecting reuses the same promise.
+4. The API logs `mongodb connected` with the password replaced by `***`, then
+   seeds the permission catalogue and syncs every school's role grants. These
+   steps are idempotent, so they are safe on every boot.
+
+## Pricing in short
+
+- **Local MongoDB** (Community Server or the Docker image) is free.
+- **MongoDB Atlas** has a free shared tier that is enough for development and
+  demos, plus paid dedicated tiers for production. Limits and prices change —
+  check the [Atlas pricing page](https://www.mongodb.com/pricing) before you
+  pick a tier for real schools.
+
+## Option A — a local server for development
+
+Pick one way to run `mongod` on port 27017.
+
+<Tabs>
+  <TabItem label="Docker">
+    <Steps>
+
+    1. Start a MongoDB 8 container in the background:
+
+       ```sh
+       docker run --name schola-mongo -p 27017:27017 -d mongo:8
+       ```
+
+    2. Check it answers:
+
+       ```sh
+       docker exec schola-mongo mongosh --quiet --eval "db.runCommand({ ping: 1 })"
+       ```
+
+       You should see `{ ok: 1 }`.
+
+    3. Leave `MONGODB_URI` as the default, or write it out in `test.env`:
+
+       ```sh title="test.env"
+       MONGODB_URI=mongodb://localhost:27017/schola
+       ```
+
+    </Steps>
+  </TabItem>
+  <TabItem label="Homebrew (macOS)">
+    <Steps>
+
+    1. Add MongoDB's tap and install the Community Server:
+
+       ```sh
+       brew tap mongodb/brew
+       brew install mongodb-community@8.0
+       ```
+
+    2. Start it as a background service:
+
+       ```sh
+       brew services start mongodb-community@8.0
+       ```
+
+    3. Check it answers:
+
+       ```sh
+       mongosh --quiet --eval "db.runCommand({ ping: 1 })"
+       ```
+
+    4. Leave `MONGODB_URI` as the default, or write it out in `test.env`:
+
+       ```sh title="test.env"
+       MONGODB_URI=mongodb://localhost:27017/schola
+       ```
+
+    </Steps>
+  </TabItem>
+</Tabs>
+
+The database name is the last part of the URI (`/schola`). MongoDB creates the
+database and its collections the first time Schola writes to them.
+
+## Option B — MongoDB Atlas (staging and production)
+
+<Steps>
+
+1. Create an account at [mongodb.com/cloud/atlas/register](https://www.mongodb.com/cloud/atlas/register)
+   and sign in to the [Atlas console](https://cloud.mongodb.com/).
+
+2. Create a **project** (for example `Schola`), then **Create** a cluster.
+   Choose the free tier for development, or a dedicated tier for production.
+   Pick the cloud region closest to where the API runs.
+
+3. Open **Database Access** and add a database user, for example
+   `schola_app`, with a strong generated password. Give it read and write
+   access to the `schola` database (the built-in "Read and write to any
+   database" role also works).
+
+4. Open **Network Access** and allow the machines that will connect:
+   your own IP address while developing, and your API host's outbound IP in
+   production. Avoid leaving `0.0.0.0/0` (everyone) open after setup.
+
+5. Go back to the cluster and click **Connect → Drivers**. Copy the
+   connection string. It looks like
+   `mongodb+srv://schola_app:<password>@cluster0.xxxxx.mongodb.net/?retryWrites=true&w=majority`.
+
+6. Replace `<password>` with the real password (URL-encode characters such as
+   `@`, `:`, `/` or `%`), and add the database name **before** the `?`:
+
+   ```sh
+   mongodb+srv://schola_app:PASSWORD@cluster0.xxxxx.mongodb.net/schola?retryWrites=true&w=majority
+   ```
+
+   Without `/schola` the driver uses a database called `test`.
+
+7. Put the finished string in **`MONGODB_URI`**:
+   - Development: `test.env` at the repo root (gitignored).
+   - Production: your API host's environment variables, or
+     `apps/api/.env.production.local` (gitignored). Never in a committed file.
+
+8. Restart the API. It reads the value once, at boot.
+
+</Steps>
+
+### Anatomy of the connection string
+
+| Part | Example | Meaning |
+|---|---|---|
+| Scheme | `mongodb+srv://` | Atlas uses DNS SRV records to find the cluster's servers. Local servers use `mongodb://`. |
+| Credentials | `schola_app:PASSWORD@` | The database user from step 3. Special characters must be URL-encoded. |
+| Host | `cluster0.xxxxx.mongodb.net` | Your cluster. Locally: `localhost:27017`. |
+| Database | `/schola` | The database Schola writes to. |
+| Options | `?retryWrites=true&w=majority` | Atlas defaults: retry a failed write once, wait for a majority of nodes. |
+
+<Aside type="caution" title="Keep the URI secret">
+The connection string contains a password. Keep it in `test.env` or the
+host's secret settings, never in the committed `.env` or
+`apps/api/.env.production`. The API only ever logs it with the password
+replaced by `***`.
+</Aside>
+
+## Collections and indexes
+
+Each Mongoose model in `packages/db/src/models` becomes one collection (Mongoose
+lower-cases and pluralises the model name — `Student` becomes `students`).
+Every model gets `createdAt` / `updatedAt`, `createdBy` / `updatedBy`, and a
+`deletedAt` field for [soft delete](/start-here/glossary/#soft-delete): normal queries automatically hide documents
+whose `deletedAt` is set.
+
+Indexes are declared next to each schema. The important ones:
+
+| Kind | Examples | Why it matters |
+|---|---|---|
+| Global unique | `users.email`; `users.googleId` and `users.facebookId` (only when set) | One account per email address and per social login. |
+| Unique per school | students by `admissionNumber`, teachers and staff by `employeeId`, subjects by `code`, fee invoices by `invoiceNumber`, payslips by `payslipNumber`, roles by `key` | Two schools can reuse the same numbers; one school cannot. |
+| Unique while active | one attendance mark per student per day, one grade per student, exam and subject, one active enrolment, one bed per boarder | Uses a partial filter on `deletedAt: null`, so soft-deleted rows do not block new ones. |
+| Lookup | `schoolId + date + sectionId` on attendance, `schoolId + createdAt` on the audit log | Keeps the daily screens and the audit log fast. |
+| TTL (auto-delete) | refresh tokens 30 days after they expire; single-use tokens (verification, reset, admin transfer) 1 day after they expire | MongoDB deletes stale tokens on its own. |
+
+### When indexes get built
+
+- **Development and test:** `autoIndex` is on, so Mongoose builds any missing
+  index in the background when a model is first used.
+- **The demo seed** calls `createIndexes()` on the school, user, role,
+  membership, notification and every tenant model before its bulk insert. It
+  never drops an existing index.
+- **Production:** `autoIndex` is **off**. Instead the API builds indexes once
+  per boot, before it starts serving: `ensureIndexesOnBoot()`
+  (`apps/api/src/services/db-indexes.ts`) calls `createIndexes()` on every
+  registered model. It only adds what is missing and never drops an index. A
+  failure is logged ("index build failed for some models — unique / TTL
+  guarantees may be missing") and the API still starts; the log says "indexes
+  ensured" when all went well.
+
+<Aside type="caution" title="Upgrading an existing database">
+Before this release `RefreshToken` and `SingleUseToken` also declared a plain
+`expiresAt_1` index, which made MongoDB refuse their TTL index — so old tokens
+were never deleted. A database created back then still has the plain index,
+and the boot build reports a failure for those two models until you drop it
+once (`db.refreshtokens.dropIndex("expiresAt_1")` and
+`db.singleusetokens.dropIndex("expiresAt_1")`) and restart the API. The two
+`StaffAttendance` unique indexes were also fixed (their partial filter now uses
+`$type: "objectId"`, which MongoDB accepts); they are created on the next
+boot.
+</Aside>
+
+## How the code uses it
+
+- <SourceFile path="packages/db/src/connection.ts" symbol="connectDb" /> — opens the shared connection (`strictQuery`, `autoIndex` off in production); `disconnectDb()` closes it.
+- <SourceFile path="apps/api/src/index.ts" symbol="main" /> — connects at boot, logs the redacted URI, seeds permissions, then starts listening.
+- <SourceFile path="packages/db/src/base.ts" /> — the shared audit fields and the soft-delete query hooks.
+- <SourceFile path="packages/db/src/models/index.ts" /> — every model, exported from `@schola/db`.
+- <SourceFile path="apps/api/src/jobs/seed-demo.ts" /> — `pnpm seed`, connects with a 10-second server-selection timeout.
+- <SourceFile path="apps/api/src/jobs/grant-role.ts" /> and <SourceFile path="apps/api/src/jobs/sync-role-keys.ts" /> — operator jobs that also read `MONGODB_URI`.
+
+Tenant isolation does not depend on database permissions: one database user
+reads and writes all schools, and the API enforces the `schoolId` filter. See
+[Multi-tenancy](/architecture/multi-tenancy/) and
+[Data model](/architecture/data-model/).
+
+## Backups
+
+Schola has no built-in backup job. Use the database's own tools.
+
+- **Atlas:** turn on the backup option your tier offers (dedicated tiers have
+  scheduled snapshots and point-in-time restore; check what the free tier
+  includes before relying on it). Test a restore before launch.
+- **Any server:** take a logical dump with the MongoDB Database Tools:
+
+  ```sh
+  # Dump the schola database to ./backup-YYYY-MM-DD
+  mongodump --uri="$MONGODB_URI" --out="backup-$(date +%F)"
+
+  # Restore it (add --drop to replace existing collections)
+  mongorestore --uri="$MONGODB_URI" "backup-YYYY-MM-DD"
+  ```
+
+<Aside type="tip">
+Encrypted fields (phone, date of birth, address) are stored encrypted in the
+dump too. A backup is only useful together with the `ENCRYPTION_MASTER_KEY`
+that wrote it — store the key separately and safely. See
+[PII encryption](/setup/services/encryption/).
+</Aside>
+
+## Verify it works
+
+<Steps>
+
+1. Ping the server with the same URI the API uses:
+
+   ```sh
+   mongosh "mongodb://localhost:27017/schola" --quiet --eval "db.runCommand({ ping: 1 })"
+   ```
+
+2. Start the API with `pnpm --filter @schola/api dev`. Look for
+   `mongodb connected` (with the password masked) and then
+   `Schola API listening` in its log.
+
+3. Open <Api method="GET" path="health" /> — `http://localhost:8000/api/v1/health`.
+   It answers `{ "success": true, "data": { "ok": true, … } }`. (This
+   endpoint confirms the API is up; it does not query MongoDB itself.)
+
+4. Run `pnpm seed`, then sign in at <Route path="/login" /> with a
+   [demo account](/reference/demo-accounts/). Lists full of students prove
+   reads and writes work end to end.
+
+</Steps>
+
+## Troubleshooting
+
+| Symptom | Cause and fix |
+|---|---|
+| `MongoServerSelectionError … ECONNREFUSED 127.0.0.1:27017` | No local server is running. Start the Docker container or `brew services start mongodb-community@8.0`. |
+| `querySrv ENOTFOUND _mongodb._tcp…mongodb.net` | The Atlas host name is wrong or your DNS cannot resolve SRV records. Re-copy the URI from **Connect → Drivers**. |
+| Connection times out against Atlas | Your IP is not on the Atlas **Network Access** list, or a firewall blocks port 27017. |
+| `bad auth : authentication failed` | Wrong user or password, or a special character in the password is not URL-encoded. |
+| Data "disappears" after switching URIs | The URI has no database name, so writes went to `test`. Add `/schola` before the `?`. |
+| `Invalid server environment: MONGODB_URI …` | The value is empty or malformed in the file that wins (`test.env` beats `.env`). |
+| `Production env missing required values: MONGODB_URI` | `NODE_ENV=production` and the variable is not set on the host or in `apps/api/.env.production.local`. |
+| `E11000 duplicate key error` in a script, or a 409 `CONFLICT` in the app | A unique index blocked a duplicate — for example the same admission number twice in one school. The API's error handler turns code `11000` into a 409 that names the field ("admission number", "employee ID", …). In production this protection only exists once the indexes are built (see above). |
+
+## Related pages
+
+<CardGrid>
+  <LinkCard title="Environment variables" description="Every key Schola reads, in one table." href="/reference/environment-variables/" />
+  <LinkCard title="Demo data" description="Fill the database with a complete demo school." href="/setup/demo-data/" />
+  <LinkCard title="Data model" description="Every collection and how they relate." href="/architecture/data-model/" />
+  <LinkCard title="PII encryption" description="Why some fields look scrambled in the database." href="/setup/services/encryption/" />
+</CardGrid>

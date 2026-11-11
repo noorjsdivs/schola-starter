@@ -1,0 +1,250 @@
+---
+title: 6. Run a school day
+description: Build Grade 1 · A's weekly timetable, take both registers as the teacher, mark staff attendance, write a remark the parent can read, and send and approve a leave request.
+---
+
+import { Aside, Steps, Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+import Pipeline from '../../../components/Pipeline.astro';
+import SourceFile from '../../../components/SourceFile.astro';
+import Api from '../../../components/Api.astro';
+import Perm from '../../../components/Perm.astro';
+import Roles from '../../../components/Roles.astro';
+import Route from '../../../components/Route.astro';
+import Screenshot from '../../../components/Screenshot.astro';
+
+With people in place, Sunrise Academy can run a normal day. This chapter
+switches between three people: **Laila** (School Admin) plans the week and
+marks the staff register, **Omar** (Teacher) takes the student registers and
+writes a remark, and **Sara** (Parent) asks for two days off for her daughter,
+which Laila approves.
+
+## What you'll do
+
+<Pipeline
+  caption="One school day, in the order it happens."
+  steps={[
+    { label: 'Timetable', icon: 'calendar-range', note: 'Laila plans the week' },
+    { label: 'Register', icon: 'calendar-check', note: 'Omar marks both sections' },
+    { label: 'Staff', icon: 'clipboard-check', note: 'Laila marks the staff' },
+    { label: 'Remark', icon: 'message', note: 'Omar writes about Aisha' },
+    { label: 'Leave', icon: 'send', note: 'Sara asks, Laila approves' },
+  ]}
+/>
+
+## Before you start
+
+- **Owner** profile: `owner@sunrise.example`.
+- **Teacher** profile: `teacher@sunrise.example` (password set in [chapter 5](/tutorial/add-people/)).
+- **Family** profile: `parent@sunrise.example`.
+
+## Steps
+
+### 1. Plan the week (Laila)
+
+<Steps>
+
+1. In the **Owner** profile, click **Timetable** under **Daily**. "Weekly
+   periods for each section. Click a period to set the subject, teacher and
+   room."
+
+2. Pick **Section** **Grade 1 · A**. An empty grid appears: periods **P1** to
+   **P6** down the side with their times (08:00–08:45, 08:50–09:35, 09:40–10:25,
+   10:45–11:30, 11:35–12:20, 13:10–13:55), Monday to Friday across, and
+   **+ Add** in every cell.
+
+3. Click **+ Add** in **Monday · P1**. The drawer "Monday · period 1" —
+   "Subject, teacher and room for this period." — has **Starts** and **Ends**
+   (already 08:00 and 08:45), **Subject**, **Teacher** ("A teacher can't be in
+   two sections in the same period.") and **Room**.
+
+4. Pick **Subject** **Mathematics**, **Teacher** **Omar Farouk**, type
+   **Room** `Room 101`, and click **Save period** — **"Period saved."**
+
+   <Screenshot name="tutorial-timetable-period-form" alt="The Monday period 1 drawer: Mathematics, Omar Farouk, Room 101" path="/app/timetable?section=…" />
+
+5. Fill five more periods the same way, all with Omar in Room 101:
+
+   | | P1 | P2 | P3 |
+   |---|---|---|---|
+   | Monday | Mathematics | English | Science |
+   | Tuesday | English | Mathematics | Science |
+
+   <Screenshot name="tutorial-timetable-week" alt="Grade 1 · A's week: Monday and Tuesday periods 1 to 3 filled in" path="/app/timetable?section=…" />
+
+6. **See the clash check.** Switch **Section** to **Grade 1 · B**, open
+   **Monday · P1**, pick **Mathematics** and **Omar Farouk**, and save. The
+   toast says **"That teacher already teaches Grade 1 · A in this period."**
+   and nothing is saved. Close the drawer.
+
+   <Screenshot name="tutorial-timetable-clash" alt="The clash check: That teacher already teaches Grade 1 · A in this period." path="/app/timetable?section=…" />
+
+</Steps>
+
+### 2. Take the registers (Omar)
+
+<Steps>
+
+1. In the **Teacher** profile, sign in as `teacher@sunrise.example`. Omar's
+   dashboard ("Your day at Sunrise Academy.") shows **My sections 2**,
+   **Students 4** and **Registers to take** — the sections he has not marked
+   today — with a **Register** button for each section.
+
+2. Click **Student attendance** in the sidebar. "Take the register for each
+   section, every school day." The **Date** is today, with **Previous day** and
+   **Next day** arrows. The tiles read **Sections done 0/2** and **Not marked
+   4**, and each section has a card "2 students · Not taken".
+
+   <Screenshot name="tutorial-attendance-overview" alt="The attendance overview: two sections not taken yet" path="/app/attendance" />
+
+3. Click the **Grade 1 · A** card. The register "Grade 1 · A — 2 students"
+   lists each student by roll number with **Present**, **Absent**, **Late** and
+   **Excused** buttons and a **Note** box.
+
+4. Click **Present** for Aisha Khan and **Late** for Leo Martins, and type the
+   note `Bus arrived late` for Leo. Until everyone is marked, the footer warns
+   "… students are not marked and won't be saved."
+
+   <Screenshot name="tutorial-attendance-register-marked" alt="The Grade 1 · A register: Aisha present, Leo late with a note" path="/app/attendance?section=…" />
+
+5. Click **Save attendance** — **"Attendance saved for Grade 1 · A."**
+
+6. Click **All sections**, open **Grade 1 · B**, click **All present**, then
+   **Save attendance**. The overview now reads **Sections done 2/2**.
+
+   <Screenshot name="tutorial-attendance-overview-done" alt="The attendance overview with both sections taken" path="/app/attendance" />
+
+</Steps>
+
+:::note[Any day can be recorded]
+The run behind this page was on a Saturday; Schola saved the register anyway.
+It does not block weekends or holidays, so use the **Date** picker with care.
+:::
+
+### 3. Mark the staff (Laila)
+
+<Steps>
+
+1. In the **Owner** profile, click **Staff attendance**. "Mark teachers and
+   non-teaching staff present, absent, late, or excused." The page lists
+   **Teachers — 1** (Omar) and **Other staff — 2** (Priya and Ethan), with a
+   **Mark everyone present** button.
+
+2. Mark Omar **Present**, Priya **Present** and Ethan **Late**.
+
+   <Screenshot name="tutorial-staff-attendance-marked" alt="Staff attendance with Omar and Priya present and Ethan late" path="/app/staff-attendance" />
+
+3. Click **Save staff attendance** — **"Staff attendance saved."**
+
+</Steps>
+
+### 4. Write a remark (Omar)
+
+<Steps>
+
+1. In the **Teacher** profile, click **Remarks** under **Academics**.
+   "Per-student notes from teachers and admins. Visibility controls who sees
+   what."
+
+2. In **Pick a student**, choose **Section** **Grade 1 · A** and **Student**
+   **SUN-2026-001 · Aisha Khan**, then click **Add remark**.
+
+3. In the **New remark** drawer set **Type** **Academic**, **Visibility**
+   **Parent — also visible to the parent**, and **Note**:
+   `Aisha read her first full storybook aloud to the class today. Great confidence!`
+
+   <Screenshot name="tutorial-remark-form" alt="The New remark drawer: Academic, visible to the parent" path="/app/remarks" />
+
+4. Click **Save remark** — **"Remark recorded."** The remark shows under
+   Aisha with Omar's name and today's date.
+
+</Steps>
+
+The other visibilities are **Private — only staff** and **Public — visible to
+the student too**. Sara will see this one in the portals chapter.
+
+### 5. Ask for leave (Sara) and approve it (Laila)
+
+<Steps>
+
+1. In the **Family** profile, sign in as `parent@sunrise.example` and click
+   **Leave**. The **My requests** card says "Approved days show as excused in
+   attendance."
+
+2. Click **Request leave**. The drawer says "The school's approvers see it on
+   their Leave page and decide. The outcome shows here under My requests." Fill
+   it in:
+
+   | Field | Value |
+   |---|---|
+   | For | **Aisha Khan** |
+   | Type | **Family** (the others are Sick, Casual, Other) |
+   | From | `11/09/2026` |
+   | To | `11/10/2026` |
+   | Reason | `Family wedding out of town.` |
+
+   <Screenshot name="tutorial-parent-leave-form" alt="Sara's Request leave drawer for Aisha, Family, 9 to 10 November" path="/app/leave" />
+
+3. Click **Send request** — **"Request sent."** It shows as **Pending**.
+
+4. In the **Owner** profile, open **Leave**. Laila sees two tabs, **Approvals**
+   and **My requests**, and the filters **Pending**, **Approved**, **Rejected**
+   and **All**. The row reads "Aisha Khan · Student · asked by Sara Khan",
+   "Nov 9, 2026 – Nov 10, 2026 · 2 school days · Family", with **Approve** and
+   **Decline**.
+
+   <Screenshot name="tutorial-leave-approvals" alt="The Leave approvals list with Aisha's pending request" path="/app/leave" />
+
+5. Click **Approve**. The box "Approve leave — Aisha Khan · Nov 9, 2026 – Nov
+   10, 2026" has **Note (optional)** ("The person who asked sees this."). Type
+   `Enjoy the wedding — Aisha is excused both days.` and click **Approve**.
+
+   <Screenshot name="tutorial-leave-approve-dialog" alt="The Approve leave box with a note for Sara" path="/app/leave" />
+
+6. The toast says **"Approved. 2 days marked excused."** Schola writes an
+   **Excused** attendance mark for Aisha on both days, with the note "Approved
+   leave (family)". The request moves to the **Approved** filter.
+
+   <Screenshot name="tutorial-leave-approved" alt="The Approved filter with Aisha's leave request" path="/app/leave?status=approved" />
+
+</Steps>
+
+## Check your work
+
+- <Route path="/app/attendance" /> shows **Sections done 2/2** for today, with
+  1 late.
+- The dashboard's **Get your school running** checklist has gone — all eight
+  steps are done.
+- Sara's **Leave** page shows the request as **Approved** with Laila's note.
+
+## If something goes wrong
+
+- **"That teacher already teaches … in this period."** — the clash check; pick
+  another period or another teacher.
+- **A student is missing from the register** — they have no active enrollment
+  in that section ([chapter 5](/tutorial/add-people/)).
+- **Omar cannot see a section** — check **Leads** on the Teachers page; in
+  this tutorial he is the class teacher of Grade 1 and the section teacher of
+  both sections.
+- **Sara's "For" list is empty** — she is not linked to a child on the Parents
+  page.
+
+## Under the hood
+
+- <Api method="PUT" path="timetable/slots" perm="timetable:manage" /> — one period; refuses teacher clashes with `409`.
+- <Api method="POST" path="attendance" /> and <Api method="POST" path="staff-attendance" /> — a whole register at once (`attendance.mark` in the audit log).
+- <Api method="POST" path="remarks" /> · <Api method="POST" path="leave" /> · <Api method="POST" path="leave/:id/decide" perm="leave:approve" />
+- <SourceFile path="apps/web/src/app/(tenant)/app/attendance/page.tsx" /> — the overview and the register.
+
+## Learn more
+
+<CardGrid>
+  <LinkCard title="Timetable" description="Periods, times, clashes and each role's view." href="/features/daily/timetable/" />
+  <LinkCard title="Attendance" description="Registers, the overview and corrections." href="/features/daily/attendance/" />
+  <LinkCard title="Staff attendance" description="The daily staff register." href="/features/daily/staff-attendance/" />
+  <LinkCard title="Remarks" description="Types and visibility." href="/features/daily/remarks/" />
+  <LinkCard title="Leave" description="Requests, approvals and excused days." href="/features/daily/leave/" />
+</CardGrid>
+
+## Next
+
+<LinkCard title="7. Exams and report cards" description="Create the Term 1 Midterm, enter marks and download a report card." href="/tutorial/exams-and-report-cards/" />

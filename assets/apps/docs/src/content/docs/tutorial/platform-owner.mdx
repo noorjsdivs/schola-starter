@@ -1,0 +1,141 @@
+---
+title: 1. Become the platform owner
+description: Get the Super Admin account that reviews and approves new schools — with grant-role on a real install, or the seeded superadmin@schola.example in the demo.
+---
+
+import { Aside, Steps, Tabs, TabItem, Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+import Pipeline from '../../../components/Pipeline.astro';
+import SourceFile from '../../../components/SourceFile.astro';
+import Roles from '../../../components/Roles.astro';
+import Route from '../../../components/Route.astro';
+import DemoLogin from '../../../components/DemoLogin.astro';
+import Screenshot from '../../../components/Screenshot.astro';
+
+Before any school can open on Schola, someone has to run the platform. That
+person is the **Super Admin**: they see every school, approve or reject new
+applications, suspend schools and read the platform-wide audit log. The Super
+Admin is not a member of any school — their home is the
+[platform console](/features/platform/dashboard/) at <Route path="/platform" />.
+
+Nobody can sign up as a Super Admin. The role is granted from the command
+line by someone with access to the database, so it can never be claimed from
+the web.
+
+## What you'll do
+
+- Learn how a real installation creates its first Super Admin.
+- Sign in as the demo Super Admin and look around the platform console.
+
+## Before you start
+
+- The stack is running (`pnpm dev`) and you have run `pnpm seed` once.
+- Browser profile: **Platform**.
+
+## How a Super Admin is made
+
+<Pipeline
+  caption="On a real installation the first Super Admin is an ordinary account promoted from the command line."
+  steps={[
+    { label: 'Sign up', icon: 'user-plus', note: 'Personal account on /signup' },
+    { label: 'grant-role', icon: 'terminal', note: '--role super_admin' },
+    { label: 'Log in', icon: 'log-in', note: 'Lands on /platform' },
+  ]}
+/>
+
+<Tabs>
+  <TabItem label="Demo (this tutorial)">
+    `pnpm seed` already created the Super Admin **Sam Platform**,
+    `superadmin@schola.example`, password `Schola@2026`. Use it — you do not
+    need to run anything else.
+  </TabItem>
+  <TabItem label="A real installation">
+    <Steps>
+
+    1. Open `/signup`, stay on the **Personal account** tab and create your own
+       account (first name, last name, email, password). It starts with no
+       school — a *visitor* account.
+    2. On the server, promote it:
+
+       ```sh
+       pnpm --filter @schola/api run grant-role -- --email you@yourschool.org --role super_admin
+       ```
+
+       The command needs `--email` and `--role`. Platform roles
+       (`super_admin`, `user`) must **not** have `--school-id`; school roles
+       (`school_admin`, `principal`, `teacher` …) require it. The account must
+       already exist — the command never creates one.
+    3. Sign in at `/login`. You land on <Route path="/platform" />. If you
+       were already signed in, sign out and back in so the new role is picked up.
+
+    </Steps>
+
+    Promoting to `super_admin` also switches the account on (`isActive`),
+    marks it a platform user, marks the email verified if it was not, and
+    clears any login lock-out. The command writes a `user.role.grant` entry to
+    the audit log with `actorRoleAtTime: "cli"`. Running it twice is harmless.
+  </TabItem>
+</Tabs>
+
+<Aside type="caution" title="Keep grant-role on the server">
+`grant-role` connects straight to the database named in your env files. Run it
+only on a machine that should have that access, and never against a database
+you do not mean to change.
+</Aside>
+
+## Steps
+
+<Steps>
+
+1. Open `http://localhost:3000/login`.
+
+2. Type **Email** `superadmin@schola.example` and **Password** `Schola@2026`,
+   then click **Log in**.
+
+3. You land on the platform **Dashboard** with the greeting "Welcome, Sam."
+   and the line "Platform-wide overview of every school on Schola." The
+   tiles count schools by status: **Total schools**, **Pending approval**,
+   **Active**, **Suspended** and **Rejected**.
+
+   <Screenshot name="tutorial-platform-dashboard" alt="The platform dashboard: school counts by status, a New schools chart, a School status ring, Pending approvals and Recent signups" path="/platform" />
+
+4. Look at the sidebar. **Schools** holds **All schools** and **Approvals**;
+   **People** holds **Users**; **Activity** holds **Audit log** and
+   **Notifications**; **System** holds **Settings**, **Branding**, **Locale**,
+   **Email** and **Feature flags**. You will come back to **Approvals** in
+   chapter 3 and to **Audit log** in chapter 11.
+
+5. Keep this browser profile signed in as the Super Admin for the rest of
+   the tutorial.
+
+</Steps>
+
+<DemoLogin as="Super Admin" email="superadmin@schola.example" go="/platform" />
+
+## Check your work
+
+- The top-left of the sidebar reads **Schola · Platform** and the bottom
+  card reads **Sam · Super Admin**.
+- <Route path="/platform/approvals" /> opens without an error. On a freshly
+  seeded database it lists Riverside Academy and Lakeside Coaching Centre.
+
+## If something goes wrong
+
+- **"Invalid email or password."** — the seed has not run, or it ran with
+  `--password`. Run `pnpm seed` (or `pnpm seed -- --reset` to start over).
+- **You land on `/welcome` instead of `/platform`** — the account has no
+  Super Admin role. On a real install, run `grant-role` again and sign out and
+  back in.
+- **"Account temporarily locked. Try again later."** — too many wrong
+  passwords. Wait for the lock-out to expire, or run `grant-role` again,
+  which clears it for a Super Admin.
+
+## Learn more
+
+<CardGrid>
+  <LinkCard title="Platform dashboard" description="Every tile and chart on /platform." href="/features/platform/dashboard/" />
+  <LinkCard title="Running locally" description="grant-role and its flags in detail." href="/setup/running-locally/" />
+</CardGrid>
+
+## Next
+
+<LinkCard title="2. Register a school" description="Apply for Sunrise Academy on the public sign-up page." href="/tutorial/register-a-school/" />

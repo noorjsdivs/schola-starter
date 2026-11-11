@@ -1,0 +1,236 @@
+---
+title: 11. Reports, audit and clean-up
+description: Read Sunrise Academy's attendance, fee and results reports, export them as CSV, trace every change in the school and platform audit logs, and remove the tutorial school afterwards.
+---
+
+import { Aside, Steps, Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+import Pipeline from '../../../components/Pipeline.astro';
+import SourceFile from '../../../components/SourceFile.astro';
+import Api from '../../../components/Api.astro';
+import Perm from '../../../components/Perm.astro';
+import Route from '../../../components/Route.astro';
+import Screenshot from '../../../components/Screenshot.astro';
+
+The last chapter steps back. **Reports** turn the day's records into the
+numbers a head teacher asks for: who is missing school, who owes money, how
+each class did. The **audit log** answers a different question — *who changed
+what, and when* — for every write anyone made, including the exports you are
+about to download. Finally, you remove Sunrise Academy so the database is
+ready for the next recording.
+
+## What you'll do
+
+<Pipeline
+  caption="From records to evidence, then a clean slate."
+  steps={[
+    { label: 'Reports', icon: 'chart', note: 'Attendance, fees, results' },
+    { label: 'CSV', icon: 'database', note: 'Two exports' },
+    { label: 'School log', icon: 'scroll', note: 'Laila reads it' },
+    { label: 'Platform log', icon: 'shield', note: 'Every school' },
+    { label: 'Clean up', icon: 'cog', note: 'Remove Sunrise' },
+  ]}
+/>
+
+## Before you start
+
+- **Owner** profile: `owner@sunrise.example`.
+- **Platform** profile: `superadmin@schola.example`.
+
+## Steps
+
+### 1. Read the reports
+
+<Steps>
+
+1. In the **Owner** profile, click **Reports** under **Overview**.
+   "Attendance, fees and results across the school." The header has
+   **Attendance CSV** and **Fees CSV**; below them **From** and **To** dates
+   ("Attendance uses this range. Fees show everything overdue today."), which
+   start at the first of the month and today.
+
+2. **Attendance** — **Attendance by class** draws Grade 1's "Present + late as
+   a share of recorded days." **Chronic absentees** lists "Students below 75%
+   attendance with at least 5 recorded days." — for Sunrise, "No chronic
+   absentees".
+
+3. **Fees** — **Total overdue** and **Students with overdue fees** are $0.00
+   and 0, and **Fee defaulters** ("Unpaid balances past their due date, largest
+   first.") says "Nothing overdue": November's invoices are not due until the
+   15th.
+
+4. **Results** — pick **Exam** **Term 1 Midterm**. **Class results** ("Average
+   of each student's overall %, and the share at or above 40%.") shows Grade 1:
+   **4** students, **82%** average, **100%** pass rate, top student **Aisha
+   Khan (91.7%)**.
+
+   <Screenshot name="tutorial-reports" alt="The Reports page for Sunrise Academy: attendance by class, fees and class results" path="/app/reports" />
+
+</Steps>
+
+### 2. Export CSV
+
+<Steps>
+
+1. Click **Attendance CSV**. The browser downloads
+   `attendance-<today>.csv` for the **From**–**To** range, one row per mark:
+
+   ```csv
+   Date,Admission,Student,Status,Note
+   2026-11-07,SUN-2026-004,Noah Patel,present,
+   2026-11-07,SUN-2026-003,Mia Chen,present,
+   2026-11-07,SUN-2026-002,Leo Martins,late,Bus arrived late
+   ```
+
+2. Click **Fees CSV**. `fees-<today>.csv` has one row per invoice:
+
+   ```csv
+   Invoice,Admission,Student,Period,Total,Paid,Waived,Remaining,Status,Due
+   INV-202611-7BB5E5,SUN-2026-002,Leo Martins,2026-11,310.00,310.00,0.00,0.00,paid,2026-11-15
+   INV-202611-2D055C,SUN-2026-001,Aisha Khan,2026-11,310.00,0.00,0.00,310.00,pending,2026-11-15
+   ```
+
+   The same fee export is the **Export CSV** button on **Fees**; **Payroll**
+   has **Export 2026 CSV** for payslips.
+
+</Steps>
+
+Each download is itself recorded: `report.attendance.export` and
+`report.fees.export` appear in the audit log a moment later.
+
+### 3. Read the school's audit log
+
+<Steps>
+
+1. Click **Audit log** under **Administration**. "Every change to your
+   school's data. Append-only." Newest first, each entry shows the action, the
+   time, and a line such as "resource: fee_payment · id b35b92 · req 04ac8f7e ·
+   by accountant".
+
+   <Screenshot name="tutorial-school-audit-log" alt="The school audit log with export, sign-in, payroll and fee entries" path="/app/audit-log" />
+
+2. Scroll down to see the whole tutorial in reverse: `salary.pay`,
+   `payroll.generate`, `salary_structure.create`, `fee.collect`,
+   `fee_invoice.generate`, `fee_structure.create`,
+   `grade.report_card.download`, `grade.enter`, `exam.create`,
+   `leave.approve`, `leave.request`, `remark.create`, `staff_attendance.mark`,
+   `attendance.mark`, `timetable.create`, `user_role.grant`,
+   `enrollment.create`, `parent.create`, `student.create`, `staff.create`, `teacher.create`,
+   `section.create`, `class.create`, `subject.create`,
+   `academic_year.create`, `school.update`, and every `auth.login`.
+
+3. Narrow it down with **Filters**: type `fee.collect` in **Action** (or set
+   **From** and **To**). The hint under it reads 'Matches the start:
+   "student." or "fee.collect"', so `fee.` would also keep every other fee
+   action. One entry is left — Ethan's cash payment.
+
+4. Click its **2 changes** button. A **Field / Before / After** table opens:
+   the **invoice** before (`amountPaid: 0`, `status: "pending"`) and after
+   (`amountPaid: 310`, `status: "paid"`), and the new **payment** with its
+   receipt number. **Hide changes** folds it away.
+
+   <Screenshot name="tutorial-school-audit-log-detail" alt="The fee.collect entry expanded to show the invoice before and after, and the new payment" path="/app/audit-log" />
+
+</Steps>
+
+Database IDs in the expanded view (`studentId`, `invoiceId` …) read as
+24-character ids, and dates as ISO timestamps. Entries written before this was
+fixed stored ids as objects such as `{"i0":7007995,"i1":6252868,…}`; the page
+reads those back as the same ids.
+
+### 4. Read the platform audit log
+
+<Steps>
+
+1. In the **Platform** profile, click **Audit log** under **Activity**.
+   "Every mutation across every tenant. Append-only." Entries look the same,
+   but each says which school it belongs to ("school bbf7d3") or "platform".
+
+   <Screenshot name="tutorial-platform-audit-log" alt="The platform audit log across every school" path="/platform/audit-log" />
+
+2. Type `school.` in **Action** ('Matches the start: "school." or
+   "auth.login"') to see only the platform's school decisions — Sunrise
+   Academy's `school.signup` and `school.approve`. A full name such as
+   `school.approve` narrows it to one action.
+
+</Steps>
+
+## Clean up
+
+`sunrise.example` is one of the seed's reserved demo domains, so the demo seed's
+reset removes Sunrise Academy along with the demo data. Pick one of these:
+
+### Option A — `pnpm seed -- --reset` (recommended)
+
+<Steps>
+
+1. In a terminal at the repo root, run `pnpm seed -- --reset`.
+
+2. The seed finds every account on a reserved domain (`schola.example`,
+   `greenfield.example`, `riverside.example`, `lakeside.example`,
+   `hilltop.example`, `sunrise.example`), including soft-deleted ones, and
+   every school those accounts own. It deletes those schools, everything
+   stored under them, their roles and memberships, and the accounts
+   themselves, then seeds a fresh copy of the demo data. Its log says
+   "Removed … demo schools and … demo accounts."
+
+</Steps>
+
+Audit log entries stay — they are append-only. An account on any other
+domain that belonged to Sunrise Academy keeps its sign-in and only loses the
+membership. Stripe test-mode sessions and payments stay in your Stripe
+dashboard, and if `DATABASE_URL` (the Neon identity mirror) is set, the
+identities also stay there; remove them from Neon separately.
+
+<Aside type="danger" title="This cannot be undone">
+The reset deletes for good, and it also replaces Greenfield and the other demo
+schools with a fresh copy. Check `MONGODB_URI` first, and never run it against
+production.
+</Aside>
+
+### Option B — record on a throwaway database
+
+Before recording, point `MONGODB_URI` in `test.env` at a separate database
+(for example the same cluster with a different database name), run
+`pnpm seed`, record the tutorial, then drop that database in Atlas or Compass
+and switch `MONGODB_URI` back. Nothing in your main database changes.
+
+A gentler stop-gap is **Suspend…** on Sunrise Academy's row in
+<Route path="/platform/schools" />. It keeps every record but pauses every
+sign-in and session for its members, who are told "This school is suspended,
+so sign-in is paused for everyone there. Contact the platform team to restore
+access."
+
+## Check your work
+
+- **Reports** shows Grade 1's class result and the attendance chart.
+- Both CSV files open in a spreadsheet with the columns above.
+- After clean-up, <Route path="/platform/schools" /> no longer lists Sunrise
+  Academy, and `owner@sunrise.example` gets "Invalid email or password.".
+
+## If something goes wrong
+
+- **A CSV link opens a page of JSON with `UNAUTHENTICATED`** — your session
+  expired; sign in again and retry.
+- **The audit log looks empty** — the filters are still set; clear **Action**,
+  **From** and **To**.
+- **The reset removed no schools** — the accounts were already deleted, or
+  you are connected to another database.
+
+## Under the hood
+
+- <Api method="GET" path="reports/attendance/export.csv?from=&to=" /> · <Api method="GET" path="reports/fees/export.csv" /> · <Api method="GET" path="audit-logs" />
+- <SourceFile path="apps/api/src/seed/run-demo-seed.ts" symbol="findDemoData" /> — how `--reset` decides what is demo data.
+- <SourceFile path="apps/api/src/seed/demo-school.ts" symbol="DEMO_EMAIL_DOMAINS" /> — the reset's domain list.
+
+## Learn more
+
+<CardGrid>
+  <LinkCard title="Reports" description="Every chart, list and export." href="/features/insight/reports/" />
+  <LinkCard title="Audit log" description="Filters, entries and before/after detail." href="/features/insight/audit-log/" />
+  <LinkCard title="Audit log architecture" description="What is logged, and why it is append-only." href="/architecture/audit-log/" />
+  <LinkCard title="Demo data" description="pnpm seed and its --reset option." href="/setup/demo-data/" />
+</CardGrid>
+
+## Next
+
+<LinkCard title="Back to the start" description="The tutorial overview, chapter list and recording checklist." href="/tutorial/overview/" />

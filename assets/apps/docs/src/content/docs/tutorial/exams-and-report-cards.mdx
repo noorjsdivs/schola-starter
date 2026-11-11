@@ -1,0 +1,175 @@
+---
+title: 7. Exams and report cards
+description: Create the Term 1 Midterm, let the teacher enter marks for every subject in the gradebook, and download Aisha Khan's report card as a PDF.
+---
+
+import { Aside, Steps, Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+import Pipeline from '../../../components/Pipeline.astro';
+import SourceFile from '../../../components/SourceFile.astro';
+import Api from '../../../components/Api.astro';
+import Perm from '../../../components/Perm.astro';
+import Route from '../../../components/Route.astro';
+import Screenshot from '../../../components/Screenshot.astro';
+
+An **exam** in Schola is an event — "Term 1 Midterm, 26–30 October, out of
+100" — not a single paper. Teachers then fill the **gradebook**: one grid per
+exam, section and subject. Schola works out each percentage and letter grade,
+and a **report card** PDF gathers one student's results for one exam.
+
+## What you'll do
+
+<Pipeline
+  caption="From exam to report card."
+  steps={[
+    { label: 'Exam', icon: 'clipboard-list', note: 'Laila creates it' },
+    { label: 'Marks', icon: 'award', note: 'Omar fills the grids' },
+    { label: 'Grades', icon: 'chart', note: 'Percent and letter' },
+    { label: 'Report card', icon: 'file-text', note: 'One PDF per student' },
+  ]}
+/>
+
+## Before you start
+
+- **Owner** profile: `owner@sunrise.example` — creates the exam and downloads
+  the report card.
+- **Teacher** profile: `teacher@sunrise.example` — enters the marks.
+
+## Steps
+
+### 1. Create the exam (Laila)
+
+<Steps>
+
+1. In the **Owner** profile, click **Exams** under **Academics**. The list
+   says "No exams yet".
+
+2. Click **Add exam**. The **New exam** drawer — "An exam event for one
+   academic year." — has these fields:
+
+   | Field | Value |
+   |---|---|
+   | Academic year | **2026-2027 (current)** |
+   | Name | `Term 1 Midterm` |
+   | Start date | `10/26/2026` |
+   | End date | `10/30/2026` |
+   | Max marks | `100` |
+   | Description | `Written papers in every core subject.` |
+
+   <Screenshot name="tutorial-exam-form" alt="The New exam drawer for Term 1 Midterm, out of 100" path="/app/exams" />
+
+3. Click **Save** — **"Exam created."**
+
+   <Screenshot name="tutorial-exams-list" alt="The Exams list with Term 1 Midterm" path="/app/exams" />
+
+</Steps>
+
+**Max marks** applies to every subject in the exam, so a "/100" exam means
+every paper is marked out of 100.
+
+### 2. Enter the marks (Omar)
+
+<Steps>
+
+1. In the **Teacher** profile, click **Gradebook**. "Enter marks per student
+   for an exam, section, and subject. Percentage and letter grade are computed
+   automatically."
+
+2. In **Pick exam, section & subject**, choose **Exam** **Term 1 Midterm
+   (/100)**, **Section** **Grade 1 · A** and **Subject** **MATH ·
+   Mathematics**. The grid "Grades — 2 students · Max marks: 100" appears with
+   **Student**, **Marks**, **%**, **Grade** and **Remark** columns.
+
+3. Type the marks — the **%** and **Grade** columns fill in as you type. Add
+   the remark `Excellent problem solving` for Aisha.
+
+   <Screenshot name="tutorial-gradebook-grid" alt="The gradebook grid for Grade 1 · A Mathematics: Aisha 92 (A+), Leo 78 (B)" path="/app/gradebook" />
+
+4. Click **Save grades** — **"Grades saved."**
+
+5. Change **Subject** (and then **Section**) and repeat until all six grids
+   are saved:
+
+   | Student | Section | Mathematics | English | Science |
+   |---|---|---|---|---|
+   | Aisha Khan | A | 92 | 88 | 95 |
+   | Leo Martins | A | 78 | 81 | 74 |
+   | Mia Chen | B | 85 | 90 | 83 |
+   | Noah Patel | B | 69 | 72 | 77 |
+
+</Steps>
+
+The letter grade comes from the percentage: **A+** 90 and above, **A** 80–89,
+**B** 70–79, **C** 60–69, **D** 50–59, **E** 40–49, **F** below 40.
+
+<Aside type="note" title="Who can type in the gradebook">
+The grid is editable only with the <Perm name="grade:enter" /> permission
+(Teacher and School Admin). Roles that can only read grades, such as the
+Principal, see the same grid read-only, without **Save grades**.
+</Aside>
+
+### 3. Download the report card (Laila)
+
+<Steps>
+
+1. In the **Owner** profile, open **Students** and click **Aisha Khan**. Her
+   profile header reads "Grade 1 · Section A · Roll 1 · SUN-2026-001".
+
+2. Click the **Grades** tab. The **Term 1 Midterm** card ("Oct 26, 2026 – Oct
+   30, 2026") shows **91.7%** and "Grade A+ · 275/300", then a row per
+   subject.
+
+   <Screenshot name="tutorial-student-profile-grades" alt="Aisha Khan's Grades tab: Term 1 Midterm, 91.7%, grade A+" path="/app/students/…?tab=grades" />
+
+3. Click **Report card** on that card. The PDF opens in a new tab — here
+   `RC-9EEB43-SUN-2026-001.pdf`.
+
+   <Screenshot name="tutorial-report-card-pdf" alt="Aisha Khan's report card PDF: English 88, Mathematics 92, Science 95, total 275/300, 91.7% A+" path="/api/v1/student-records/…/report-card.pdf" />
+
+</Steps>
+
+The report card carries the school's name and address, a report-card number,
+the student, class, section and roll number, the exam and its dates, a row per
+subject (**Marks**, **Out of**, **%**, **Grade**), the total and overall grade,
+and the student's attendance for the academic year.
+
+The attendance line counts the academic year **up to today** — the attendance
+tab stops at today too, so the two agree. Aisha's report card reads "Attendance this academic
+year: 1 of 1 days (100.0%)": today's **Present**. The two **Excused** days the
+approved leave wrote ahead of time (9 and 10 November) haven't happened yet,
+so they are left out until their dates arrive.
+
+## Check your work
+
+- Each of the four students has three grades for Term 1 Midterm.
+- The report card downloads for Aisha with a total of **275 / 300**.
+- Parents and students see the same results on their own pages — you look at
+  them in the [portals chapter](/tutorial/portals-tour/).
+
+## If something goes wrong
+
+- **"No students enrolled in this section for the exam's academic year"** — the
+  exam's year and the students' enrollments must match.
+- **The Report card button is missing** — the student has no grades for any
+  exam yet, or you are in the **Load sample** preview, which hides it.
+- **A mark above Max marks** — the API refuses the whole save
+  (`marksObtained > maxMarks for student …`); marks run from 0 to the exam's
+  maximum.
+
+## Under the hood
+
+- <Api method="POST" path="exams" /> · <Api method="POST" path="grades" perm="grade:enter" />
+- <Api method="GET" path="student-records/:id/report-card.pdf?examId=" /> — the PDF, rendered with `@react-pdf/renderer`.
+- <SourceFile path="packages/db/src/models/grade.ts" /> — the letter-grade scale.
+- <SourceFile path="apps/web/src/components/records/student-grades.tsx" /> — the Grades tab and its **Report card** link.
+
+## Learn more
+
+<CardGrid>
+  <LinkCard title="Exams" description="Creating, editing and deleting exams." href="/features/assessment/exams/" />
+  <LinkCard title="Gradebook" description="The grid, remarks and who may enter marks." href="/features/assessment/gradebook/" />
+  <LinkCard title="PDFs and media" description="How report cards, receipts and payslips are rendered." href="/architecture/pdfs-and-media/" />
+</CardGrid>
+
+## Next
+
+<LinkCard title="8. Fees and payments" description="A fee structure, November's invoices, a cash payment with receipt, and Stripe Checkout for parents." href="/tutorial/fees-and-payments/" />

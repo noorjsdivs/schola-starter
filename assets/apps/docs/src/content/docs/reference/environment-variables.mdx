@@ -1,0 +1,225 @@
+---
+title: Environment variables
+description: Every environment variable Schola reads — which app uses it, whether it is required in development and production, its default and what it does — plus the files they live in and the keys that are unused or missing.
+---
+
+import { Aside, Card, CardGrid, LinkCard, Badge } from '@astrojs/starlight/components';
+import Pipeline from '../../../components/Pipeline.astro';
+import SourceFile from '../../../components/SourceFile.astro';
+
+Schola is configured entirely through environment variables. This page is the
+complete list: every key the code reads, the key names in the committed
+templates, and the handful that exist in one place but not the other. For a
+guided first-time setup, start with
+[Setup → Environment variables](/setup/environment-variables/); for each
+external service, follow its page under **Setup → External services**.
+
+<Aside type="danger" title="Never put secret values in committed files">
+The repo-root `.env` and the `apps/*/.env.production` files are committed
+templates. Secrets — database URLs, API keys, signing secrets, the encryption
+key — belong in the gitignored `test.env` (development), in
+`apps/<app>/.env.production.local`, or in your host's secret settings. This
+page lists key names only.
+
+If a real value ever lands in a committed file, rotate it at its provider —
+removing the line doesn't remove it from Git history.
+</Aside>
+
+## Where values come from
+
+<Pipeline
+  caption="Development, for the API and the seed. The first source that defines a key wins."
+  steps={[
+    { label: 'Shell / host', icon: 'terminal', note: 'Already-set variables' },
+    { label: 'test.env', icon: 'lock', note: 'Gitignored, your secrets' },
+    { label: '.env', icon: 'file-text', note: 'Committed template' },
+    { label: 'Code default', icon: 'cog', note: 'Zod schema defaults' },
+  ]}
+/>
+
+| App | Development | Production | Loaded by |
+|---|---|---|---|
+| API (`apps/api`), the seed and the operator jobs | Shell → `test.env` → `.env` (repo root) | Host variables → `apps/api/.env.production.local` → `apps/api/.env.production` | `apps/api/src/load-env.ts` (dotenv, never overrides a key that is already set), chosen by `NODE_ENV` |
+| Web app (`apps/web`) | Shell → `apps/web/.env*` files, if you create them | Host variables → `apps/web/.env.production.local` → `apps/web/.env.production` | Next.js itself (`next dev`, `next build`, `next start`) |
+| Docs (`apps/docs`) | — | — | Reads no variables |
+| `pnpm --filter @schola/db db:migrate` | Shell only | Shell only | Plain `process.env` — no file is loaded |
+
+Two rules apply to every server-side key:
+
+- **Blank means unset.** `loadServerEnv()` turns an empty value (`KEY=`) into
+  "not set", so the default applies. In `test.env`, `KEY=` is a handy way to
+  mask a value from `.env`.
+- **Validated at startup.** The API checks every key with Zod and stops with
+  `Invalid server environment:` and a list of problems if a value is malformed.
+  With `NODE_ENV=production` it also stops with
+  `Production env missing required values: …` if any key marked **Yes
+  (enforced)** below is missing.
+
+<Aside type="caution" title="The web app does not read the repo-root env files">
+Next.js loads env files only from its own folder, `apps/web/`. In
+development there is no `apps/web/.env` or `.env.local` by default, so the
+`NEXT_PUBLIC_*` keys in the root `test.env` and `.env` are **not** seen by
+`next dev` — the web app uses its built-in defaults (API at `/api/v1`, public
+URL `https://schola.reactbd.com`, Firebase off). To set web values locally,
+create `apps/web/.env.local` (gitignored by the `.env*.local` rule) or export
+them in the shell. `NEXT_PUBLIC_*` values are baked into the bundle at build
+time — rebuild after changing them.
+</Aside>
+
+## The complete table
+
+**Used by:** `api` = the Express API · `web` = the Next.js app (`server` =
+server side only, never sent to the browser) · `seed` = `pnpm seed` · `db` =
+the Neon migrate script · `e2e` = the Playwright tests · `none` = read by no
+code. **Required:** whether you must set it in development / production.
+
+| Variable | Group | Used by | Dev | Prod | Default | What it does |
+|---|---|---|---|---|---|---|
+| `NODE_ENV` | Runtime | api, web, seed | No | Yes | `development` | `development`, `test` or `production`. Production turns on the strict env check, secure cookies, JSON logs, `autoIndex` off (the API builds every model's indexes on boot instead), and makes the API load `apps/api/.env.production*`. |
+| `LOG_LEVEL` | Runtime | api | No | No | `info` | pino level: `fatal`, `error`, `warn`, `info`, `debug`, `trace`. |
+| `APP_NAME` | Branding | none | No | No | `Schola` | Validated by the API loader but not read by any API code (emails hard-code "Schola"). |
+| `APP_URL` | Branding | api | No | **Yes (enforced)** | `http://localhost:3000` | Public address of the web app. Builds links in emails, Stripe success/cancel URLs and the OAuth origin fallback. |
+| `APP_SHORT_DESCRIPTION` | Branding | none | No | No | `Multi-tenant school management platform.` | Validated but unused. |
+| `API_PORT` | API server | api | No | No | `8000` | Port the API listens on. |
+| `CORS_ORIGIN` | API server | api | No | No | `http://localhost:3000` | Comma-separated browser origins allowed to call the API with credentials. Requests without an `Origin` header (same-origin, curl) are always allowed. |
+| `MONGODB_URI` | Databases | api, seed | No | **Yes (enforced)** | `mongodb://localhost:27017/schola` | The main database. [MongoDB](/setup/services/mongodb/) |
+| `DATABASE_URL` | Databases | api, seed, db | No | No | — | Neon Postgres URL for the optional identity mirror. Blank skips it silently. [Neon Postgres](/setup/services/neon-postgres/) |
+| `JWT_ACCESS_SECRET` | Auth | api | **Yes** | **Yes (enforced)** | — | Signs the 15-minute access token (HS256). At least 32 characters; `openssl rand -hex 32`. Without it every sign-in fails with a 500. |
+| `JWT_REFRESH_SECRET` | Auth | none | No | **Yes (enforced)** | — | Validated (32+ characters) and required in production, but unused: refresh tokens are random strings stored as SHA-256 hashes. |
+| `CSRF_SECRET` | Auth | api | No | **Yes (enforced)** | built-in dev value | Signs the `schola_csrf` double-submit token. Development falls back to a fixed, non-secret value. 32+ characters. |
+| `JWT_ACCESS_TTL` | Auth | api | No | No | `15m` | Access-token and `schola_access` cookie lifetime. Format: a number plus `s`, `m`, `h` or `d`. |
+| `JWT_REFRESH_TTL` | Auth | api | No | No | `30d` | Refresh-token and `schola_refresh` cookie lifetime. Same format. |
+| `COOKIE_DOMAIN` | Auth | api | No | **Yes (enforced)** | `localhost` | Cookie `Domain`. `localhost` means "omit the attribute" (host-only cookies). Production: `.schola.reactbd.com`. |
+| `ARGON2_MEMORY_COST` | Auth | api, seed | No | No | `19456` | argon2id memory cost in KiB. Not listed in any env file. |
+| `ARGON2_TIME_COST` | Auth | api, seed | No | No | `2` | argon2id iterations. Not listed in any env file. |
+| `ARGON2_PARALLELISM` | Auth | api, seed | No | No | `1` | argon2id lanes. Not listed in any env file. |
+| `LOGIN_LOCKOUT_THRESHOLD` | Auth | api | No | No | `5` | Wrong passwords in a row before the account locks. |
+| `LOGIN_LOCKOUT_MINUTES` | Auth | api | No | No | `15` | How long a locked account stays locked. |
+| `PASSWORD_RESET_TTL_MIN` | Auth | api | No | No | `60` | Password-reset and set-password links. Teacher invitations last 24 × this value. |
+| `EMAIL_VERIFICATION_TTL_HOURS` | Auth | api | No | No | `72` | Email-verification link and 6-digit code. |
+| `ADMIN_TRANSFER_TTL_HOURS` | Auth | api | No | No | `24` | School admin-transfer acceptance link. |
+| `GOOGLE_OAUTH_CLIENT_ID` | Social sign-in | api | No | No | — | Google OAuth web client for the redirect button. [Social sign-in](/setup/services/social-sign-in/) |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | Social sign-in | api | No | No | — | Its secret. Both must be set for the Google button to work. |
+| `FACEBOOK_OAUTH_CLIENT_ID` | Social sign-in | api | No | No | — | Facebook app ID for the redirect button. |
+| `FACEBOOK_OAUTH_CLIENT_SECRET` | Social sign-in | api | No | No | — | Facebook app secret. |
+| `FIREBASE_PROJECT_ID` | Social sign-in | api | No | No | — | Firebase Admin project for `POST /auth/google`. All three Firebase server keys or none. |
+| `FIREBASE_CLIENT_EMAIL` | Social sign-in | api | No | No | — | Service-account email (must be a valid email address). |
+| `FIREBASE_PRIVATE_KEY` | Social sign-in | api | No | No | — | Service-account PEM key. Paste it quoted; literal `\n` is turned into newlines. |
+| `ENCRYPTION_MASTER_KEY` | Encryption | api, seed | For people data and the seed | **Yes (enforced)** | — | 32 bytes, base64 (`openssl rand -base64 32`). Encrypts phone, date of birth and address. Must match the key that wrote the data. [PII encryption](/setup/services/encryption/) |
+| `RESEND_API_KEY` | Email | api | No | **Yes (enforced)** | — | Resend API key. When set, Resend is the only transport. [Email](/setup/services/email/) |
+| `EMAIL_FROM` | Email | api | No | No | `Schola <noreply@schola.reactbd.com>` | Sender for every email. Must be on a verified Resend domain. |
+| `SMTP_HOST` | Email | api | No | No | — | SMTP server, used only when `RESEND_API_KEY` is blank. |
+| `SMTP_PORT` | Email | api | No | No | `587` (when SMTP is used) | SMTP port. |
+| `SMTP_USER` | Email | api | No | No | — | SMTP user. Blank connects without authentication. |
+| `SMTP_PASS` | Email | api | No | No | — | SMTP password. |
+| `SMTP_SECURE` | Email | api | No | No | `false` | TLS from the first byte (port 465). Accepts `true`, `false`, `1` or `0` (any case); empty means `false`; any other value stops the API at boot. |
+| `IMAGEKIT_PUBLIC_KEY` | Media | api | No | **Yes (enforced)** | — | ImageKit public key. No feature uses ImageKit yet. [ImageKit](/setup/services/imagekit/) |
+| `IMAGEKIT_PRIVATE_KEY` | Media | api | No | **Yes (enforced)** | — | ImageKit private key (secret). |
+| `IMAGEKIT_URL_ENDPOINT` | Media | api | No | **Yes (enforced)** | — | `https://ik.imagekit.io/<id>`; must be a URL. |
+| `STRIPE_SECRET_KEY` | Payments | api | No | No | — | Creates Checkout Sessions. Blank: Pay buttons answer 503. [Stripe](/setup/services/stripe/) |
+| `STRIPE_WEBHOOK_SECRET` | Payments | api | No | No | — | Verifies `POST /stripe/webhook`. Blank: webhooks answer 503 and payments are never recorded. |
+| `NEXT_PUBLIC_APP_NAME` | Web | web | No | No | `Schola` | Product name in page titles, Open Graph and the web manifest. |
+| `NEXT_PUBLIC_APP_URL` | Web | web | No | Yes | `https://schola.reactbd.com` | Canonical URLs, Open Graph, sitemap and robots. Note the default is the production URL, even in development. |
+| `NEXT_PUBLIC_API_BASE_URL` | Web | web | No | No | `/api/v1` | Where the browser sends API calls. Keep the relative default so calls stay same-origin; a full URL also needs CORS. |
+| `INTERNAL_API_URL` | Web | web (server) | No | Yes | `http://localhost:8000` | Where the web server forwards `/api/*` (`next.config.ts` rewrites, and `proxy.ts` when set). Needed at build and run time. |
+| `NEXT_PUBLIC_TWITTER_HANDLE` | Web | web | No | No | `@schola` | Twitter / X card handle. |
+| `GOOGLE_SITE_VERIFICATION` | Web | web (server) | No | No | — | Google Search Console token, rendered as a `<meta>` tag. |
+| `NEXT_PUBLIC_ADSENSE_CLIENT` | Web | web (browser) | No | No | blank — set to `ca-pub-6542623777003381` in `apps/web/.env.production` | Google AdSense publisher ID. Loads Auto ads on the marketing pages only, plus the `google-adsense-account` meta tag on every page. Blank or malformed = no ads. [AdSense](/setup/services/adsense/). |
+| `PUBLIC_ADSENSE_CLIENT` | Docs | docs (build) | No | No | blank — set to `ca-pub-6542623777003381` in `apps/docs/.env.production` | The same publisher ID for the docs site's `<head>` (every page except "Page not found"). [AdSense](/setup/services/adsense/). |
+| `NEXT_PUBLIC_DEFAULT_LOCALE` | Web | none | No | No | `en` | Listed in `.env` and `turbo.json`; no code reads it. |
+| `NEXT_PUBLIC_OG_IMAGE` | Web | none | No | No | `/opengraph-image` | Listed in `.env`; no code reads it (the OG image is a route file). |
+| `NEXT_PUBLIC_PLAUSIBLE_DOMAIN` | Web | none | No | No | — | Analytics placeholder; no code reads it. |
+| `NEXT_PUBLIC_UMAMI_WEBSITE_ID` | Web | none | No | No | — | Analytics placeholder; no code reads it. |
+| `NEXT_PUBLIC_FIREBASE_API_KEY` | Web | web | No | No | — | Firebase web config. All four `NEXT_PUBLIC_FIREBASE_*` must be set for the helper to run; no screen uses it today. |
+| `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | Web | web | No | No | — | Firebase web config. |
+| `NEXT_PUBLIC_FIREBASE_PROJECT_ID` | Web | web | No | No | — | Firebase web config; should match `FIREBASE_PROJECT_ID`. |
+| `NEXT_PUBLIC_FIREBASE_APP_ID` | Web | web | No | No | — | Firebase web config. |
+| `E2E_BASE_URL` | Testing | e2e | No | — | `http://localhost:3000` | Base URL for Playwright. |
+| `E2E_PASSWORD` | Testing | e2e | No | — | `Schola@2026` | Password the E2E tests use for the [demo accounts](/reference/demo-accounts/). |
+| `CI` | Testing | e2e | No | — | — | Set by CI runners; Playwright then retries once and writes an HTML report. |
+
+## Minimum sets
+
+<CardGrid>
+  <Card title="Local development" icon="laptop">
+    MongoDB running on `localhost:27017`, plus `JWT_ACCESS_SECRET` and
+    `ENCRYPTION_MASTER_KEY` in `test.env`. Everything else has a working
+    default or switches itself off (email prints to the console).
+  </Card>
+  <Card title="Production API" icon="server">
+    `NODE_ENV=production`, `MONGODB_URI`, `APP_URL`, `COOKIE_DOMAIN`,
+    `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `CSRF_SECRET`,
+    `ENCRYPTION_MASTER_KEY`, `RESEND_API_KEY` and the three `IMAGEKIT_*` keys —
+    the API will not start without them. Add Stripe and OAuth keys to switch
+    those features on.
+  </Card>
+  <Card title="Production web" icon="rocket">
+    `NEXT_PUBLIC_APP_URL` and `INTERNAL_API_URL`, set before `next build`.
+    Optional: `GOOGLE_SITE_VERIFICATION`, `NEXT_PUBLIC_TWITTER_HANDLE`.
+  </Card>
+</CardGrid>
+
+## Which file lists which key
+
+| File | Committed? | Lists |
+|---|---|---|
+| `.env` (repo root) | Yes — template | Every key in the table except the three `ARGON2_*` keys and the testing keys. |
+| `test.env` (repo root) | No — gitignored | Your local values; start with `cp .env test.env`. |
+| `apps/api/.env.production` | Yes — template | Only the keys the API reads, with production values for the non-secret ones and blank secrets. |
+| `apps/web/.env.production` | Yes — template | `NEXT_PUBLIC_APP_NAME`, `NEXT_PUBLIC_APP_URL`, `NEXT_PUBLIC_API_BASE_URL`, `INTERNAL_API_URL`, `NEXT_PUBLIC_TWITTER_HANDLE`, `GOOGLE_SITE_VERIFICATION`, `NEXT_PUBLIC_ADSENSE_CLIENT`, the four `NEXT_PUBLIC_FIREBASE_*`. |
+| `apps/docs/.env.production` | Yes — template | `PUBLIC_ADSENSE_CLIENT` (the docs' only key; read by `astro build`, not `astro dev`). |
+| `apps/*/.env.production.local` | No — gitignored | Real production secrets, if you do not use the host's settings. |
+| `_.github/workflows/ci.yml` | Yes | The CI workflow (kept under `_.github/`; GitHub only runs workflows from `.github/`). Its E2E job sets every API key explicitly, blanks the external services, and generates fresh JWT, CSRF and encryption secrets. |
+
+## Unused, missing and stale keys
+
+<Aside type="caution" title="Present in .env but read by no code">
+`APP_NAME`, `APP_SHORT_DESCRIPTION`, `NEXT_PUBLIC_DEFAULT_LOCALE`,
+`NEXT_PUBLIC_OG_IMAGE`, `NEXT_PUBLIC_PLAUSIBLE_DOMAIN` and
+`NEXT_PUBLIC_UMAMI_WEBSITE_ID`. `JWT_REFRESH_SECRET` is read only by the
+validator, which still requires it in production. The three `IMAGEKIT_*` keys
+are required in production but no feature calls ImageKit yet.
+</Aside>
+
+<Aside type="caution" title="Read by code but missing from the env files">
+`ARGON2_MEMORY_COST`, `ARGON2_TIME_COST` and `ARGON2_PARALLELISM` (defaults
+19456 / 2 / 1) appear in no env file — `apps/api/.env.production` has the
+"argon2id cost parameters" heading with no keys under it. The test-only
+`E2E_BASE_URL`, `E2E_PASSWORD` and `CI` are set by CI rather than `.env`.
+</Aside>
+
+<Aside type="note" title="turbo.json is out of step">
+`turbo.json` `globalEnv` still lists five `S3_*` keys that nothing uses, and
+does not list `DATABASE_URL`, the `GOOGLE_OAUTH_*` / `FACEBOOK_OAUTH_*` keys,
+`STRIPE_*`, `IMAGEKIT_*` or the server `FIREBASE_*` keys. Turborepo 2 runs
+tasks in strict env mode by default, so a value you only *export in your
+shell* may not reach a task started with `pnpm dev` unless it is listed there.
+The API is not affected for keys in `test.env`, because it loads that file
+itself. `globalDependencies` also names a `.env.example` file that does not
+exist.
+</Aside>
+
+<Aside type="note" title="packages/config/src/client.ts is not used">
+`@schola/config` also exports `loadClientEnv()` with its own defaults
+(including an outdated `http://localhost:4000/api/v1` API URL). The web app
+never calls it; its real defaults live in `apps/web/src/lib/env.ts`,
+`apps/web/src/lib/seo.ts` and `apps/web/next.config.ts`.
+</Aside>
+
+## Under the hood
+
+- <SourceFile path="packages/config/src/server.ts" symbol="loadServerEnv" /> — the Zod schema for every API key, the blank-to-unset rule, the Firebase key newline fix, and the production check.
+- <SourceFile path="apps/api/src/load-env.ts" /> — which files the API, seed and jobs load, in which order.
+- <SourceFile path="apps/web/src/lib/env.ts" /> — the browser-side reader (`pick()` treats blank as unset) and `isFirebaseConfigured()`.
+- <SourceFile path="apps/web/next.config.ts" /> and <SourceFile path="apps/web/proxy.ts" /> — `INTERNAL_API_URL` and the `/api/*` forwarding.
+- <SourceFile path="packages/db/src/crypto.ts" /> — reads `ENCRYPTION_MASTER_KEY` directly from `process.env`.
+- <SourceFile path="turbo.json" /> — `globalEnv` and `globalDependencies` for task caching.
+
+## Related pages
+
+<CardGrid>
+  <LinkCard title="Setup: environment variables" description="Create test.env and fill the keys you need, step by step." href="/setup/environment-variables/" />
+  <LinkCard title="Running locally" description="Start the API, the web app and the docs." href="/setup/running-locally/" />
+  <LinkCard title="Deployment" description="Which values each production host needs." href="/operations/deployment/" />
+  <LinkCard title="Troubleshooting" description="Common start-up and configuration errors." href="/operations/troubleshooting/" />
+</CardGrid>

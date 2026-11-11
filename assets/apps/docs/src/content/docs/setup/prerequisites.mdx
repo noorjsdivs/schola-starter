@@ -1,0 +1,174 @@
+---
+title: Prerequisites
+description: The tools and accounts you need before installing Schola — Node 22, pnpm 9, MongoDB 8, OpenSSL, the bundled Stripe CLI — and how to check each one.
+---
+
+import { Aside, Card, CardGrid, LinkCard, Tabs, TabItem, Badge } from '@astrojs/starlight/components';
+import SourceFile from '../../../components/SourceFile.astro';
+import FeatureGrid from '../../../components/FeatureGrid.astro';
+
+Before you install Schola you need four things on your computer: **Node.js
+22**, **pnpm 9**, **Git**, and a **MongoDB 8** database (on your machine or in
+the cloud). Everything else — the email, image, payment and sign-in services —
+is optional while you develop. Schola switches each feature off cleanly until
+you add its keys.
+
+## The short list
+
+| Tool | Version | Required? | Why |
+|---|---|---|---|
+| Node.js | 22 or newer | Yes | Runs the web app, the API and every script. The root `package.json` declares `"engines": { "node": ">=22.0.0" }`. |
+| pnpm | 9 (the repo pins `9.15.0`) | Yes | Installs the monorepo's workspaces. Declared as `"packageManager": "pnpm@9.15.0"`. |
+| Git | any recent | Yes | To clone the repository. The pre-commit hook (husky) also needs it. |
+| MongoDB | 8 | Yes | Stores every school's data. Local `mongod`, Docker, or a free MongoDB Atlas cluster. |
+| OpenSSL | any | Recommended | Generates the secrets in your env file (`openssl rand …`). Preinstalled on macOS and Linux. |
+| A POSIX shell | `sh` | Yes, to run the API's `dev` script | The API's `dev` script uses `sh -c` with `&` and `trap`. On Windows, use WSL. |
+| Stripe CLI | `1.55.6` | Comes with `pnpm install` | Installed as a dev dependency of the API (`@stripe/cli`). Only needs a one-time `stripe login` if you test online payments. |
+| Docker | any | Optional | The quickest way to run MongoDB 8 locally. |
+
+<Aside type="note" title="Free ports">
+Local development uses port **3000** (web app), **8000** (API), **3002** (these
+docs) and **27017** (MongoDB). Stop anything else listening on them first.
+</Aside>
+
+## Check what you have
+
+Run these in a terminal. Each line shows the command and what a good answer looks like.
+
+```sh
+node -v          # v22.x or newer
+pnpm -v          # 9.x
+git --version    # git version 2.x
+openssl version  # OpenSSL 3.x or LibreSSL 3.x
+mongod --version # db version v8.x   (only if MongoDB runs on this machine)
+docker --version # Docker version …  (only if you use Docker for MongoDB)
+```
+
+After `pnpm install`, check the bundled Stripe CLI from the repo root:
+
+```sh
+pnpm --filter @schola/api exec stripe version
+```
+
+## Install the tools
+
+### Node.js 22
+
+Install Node 22 LTS from [nodejs.org](https://nodejs.org/) or with a version
+manager such as `nvm`:
+
+```sh
+nvm install 22
+nvm use 22
+```
+
+The CI pipeline also runs on Node 22, so that is the safest choice.
+
+### pnpm 9
+
+Node ships with **Corepack**, which installs the exact pnpm version the repo
+asks for in its `packageManager` field:
+
+```sh
+corepack enable
+pnpm -v   # Corepack fetches pnpm 9.15.0 the first time you run it inside the repo
+```
+
+If you prefer a global install: `npm install -g pnpm@9`.
+
+<Aside type="caution">
+Use pnpm, not npm or yarn. The repo is a pnpm workspace (`pnpm-workspace.yaml`
+lists `apps/*` and `packages/*`), and packages depend on each other with
+`workspace:*`, which npm and yarn do not install the same way.
+</Aside>
+
+### MongoDB 8
+
+Pick one. The default connection string, `mongodb://localhost:27017/schola`,
+works with the first two without any change.
+
+<Tabs>
+  <TabItem label="Docker">
+    ```sh
+    docker run --name schola-mongo -p 27017:27017 -d mongo:8
+    ```
+
+    Stop it with `docker stop schola-mongo` and start it again with
+    `docker start schola-mongo`. The CI pipeline uses the same `mongo:8` image.
+  </TabItem>
+  <TabItem label="macOS (Homebrew)">
+    ```sh
+    brew tap mongodb/brew
+    brew install mongodb-community@8.0
+    brew services start mongodb-community@8.0
+    ```
+  </TabItem>
+  <TabItem label="MongoDB Atlas (cloud)">
+    Create a free **M0** cluster, add a database user and allow your IP
+    address, then copy the `mongodb+srv://…` connection string into
+    `MONGODB_URI`. The full walkthrough is in [MongoDB](/setup/services/mongodb/).
+  </TabItem>
+</Tabs>
+
+You do not need to create the `schola` database or any collections — MongoDB
+creates them on first write, and the API creates its permissions and platform
+roles every time it starts.
+
+### The Stripe CLI (optional)
+
+You do **not** install it yourself. `pnpm install` downloads it as the API's
+dev dependency `@stripe/cli`, and the API's `dev` script runs
+`stripe listen` in the background to forward payment events to your local API.
+To use it, sign in once with a Stripe account:
+
+```sh
+pnpm --filter @schola/api exec stripe login
+```
+
+If you never test online payments, skip this. The listener prints an error and
+the API keeps running. See [Running locally](/setup/running-locally/#the-stripe-listener)
+and [Stripe](/setup/services/stripe/).
+
+## Accounts for external services
+
+None of these is needed to run Schola on your machine. Each one turns on a
+feature; without it, the feature degrades as described. For a production
+deployment, the API refuses to start without the ones marked **prod**.
+
+| Service | Turns on | Without it (development) | Needed in production | Setup page |
+|---|---|---|---|---|
+| MongoDB Atlas | Hosted database | Use local MongoDB | <Badge text="prod" variant="danger" /> a reachable `MONGODB_URI` | [MongoDB](/setup/services/mongodb/) |
+| Resend | Sending email | Emails are written to the API log instead (console transport) | <Badge text="prod" variant="danger" /> `RESEND_API_KEY` | [Email](/setup/services/email/) |
+| SMTP (for example Mailpit) | Email fallback | Same as above | Optional | [Email](/setup/services/email/) |
+| ImageKit | Avatar and logo uploads | Upload endpoints answer `503` | <Badge text="prod" variant="danger" /> all three `IMAGEKIT_*` keys | [ImageKit](/setup/services/imagekit/) |
+| Stripe | Online fee and salary payments | The "Pay" buttons answer `503 Stripe is not configured` | Optional | [Stripe](/setup/services/stripe/) |
+| Google Cloud OAuth / Facebook | "Continue with Google / Facebook" buttons | The button reports that sign-in is not configured | Optional | [Social sign-in](/setup/services/social-sign-in/) |
+| Firebase | Google sign-in through Firebase (fallback) | The Firebase Google button is hidden | Optional | [Social sign-in](/setup/services/social-sign-in/) |
+| Neon Postgres | Identity mirror (accounts, OAuth links) | Accounts live only in MongoDB; sign-in still works | Optional | [Neon Postgres](/setup/services/neon-postgres/) |
+
+<Aside type="tip" title="Testing email locally">
+For real-looking email without an account, run [Mailpit](https://mailpit.axllent.org/)
+(`brew install mailpit && mailpit`) and point the SMTP settings at it. Its
+inbox opens at `http://localhost:8025`. See [Email](/setup/services/email/).
+</Aside>
+
+## For running the tests
+
+- **Unit and integration tests** need nothing extra. The API's integration
+  suites start an in-memory MongoDB (`mongodb-memory-server`), which downloads a
+  MongoDB binary (about 66 MB) the first time — give the first run a few minutes.
+- **End-to-end tests** (Playwright) need a browser. Install Chromium once:
+
+  ```sh
+  pnpm --filter @schola/web exec playwright install chromium
+  ```
+
+  They also need MongoDB running and the demo data loaded. See
+  [Testing](/operations/testing/).
+
+## Next steps
+
+<CardGrid>
+  <LinkCard title="Installation" description="Clone, install, configure and start Schola for the first time." href="/setup/installation/" />
+  <LinkCard title="Environment variables" description="Every setting, what it does and where to get it." href="/setup/environment-variables/" />
+</CardGrid>

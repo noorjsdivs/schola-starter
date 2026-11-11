@@ -1,0 +1,186 @@
+---
+title: 2. Register a school
+description: Apply for Sunrise Academy on the public sign-up page as its owner, Laila Rahman — fill in the application, verify the email address, and see what a pending owner can and cannot do.
+---
+
+import { Aside, Steps, Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+import Pipeline from '../../../components/Pipeline.astro';
+import SourceFile from '../../../components/SourceFile.astro';
+import Api from '../../../components/Api.astro';
+import Roles from '../../../components/Roles.astro';
+import Route from '../../../components/Route.astro';
+import Screenshot from '../../../components/Screenshot.astro';
+
+A school joins Schola by *applying*. The owner fills in one form on the public
+sign-up page: the school's details and their own account. Schola saves both
+straight away, but the school waits in the status `pending_approval` and the
+owner's account stays switched off until a Super Admin approves it. This stops
+anyone from opening a school, and using its data, without a review.
+
+## What you'll do
+
+- Submit the application for **Sunrise Academy** as **Laila Rahman**.
+- Verify the owner's email address (optional — approval also does it).
+- Try to sign in while the school is pending, and see why it is refused.
+
+## Before you start
+
+- You are **signed out** (use the **Owner** browser profile, or a private
+  window). The sign-up page sends signed-in people away.
+- Account you will create: `owner@sunrise.example`, password `Schola@2026`.
+
+## How it works
+
+<Pipeline
+  caption="What one click on Submit application does."
+  steps={[
+    { label: 'Account', icon: 'user-plus', note: 'Owner saved, switched off' },
+    { label: 'School', icon: 'building', note: 'Status pending_approval' },
+    { label: 'Emails', icon: 'mail', note: 'Code + under review' },
+    { label: 'Notify', icon: 'bell', note: 'Every Super Admin' },
+    { label: 'Wait', icon: 'clock', note: 'Until approved' },
+  ]}
+/>
+
+The form posts to <Api method="POST" path="schools/signup" />. The API
+creates the owner's user (`isActive: false`, email not verified), creates the
+school (`status: "pending_approval"`, `ownerUserId` = the new user), emails a
+verification code and a "Your Schola application is being reviewed" message,
+adds a "New school application" notification for every Super Admin, and
+writes a `school.signup` audit entry. It answers `202 Accepted`.
+
+## Steps
+
+<Steps>
+
+1. Open `http://localhost:3000/signup`. The page is titled **Create your
+   account** — "A personal login, or the application that opens a school on
+   Schola."
+
+2. Click the **Bring a school** tab. The box reads "For institution owners —
+   Apply to bring your school onto Schola. A Schola admin reviews
+   applications — you'll get an email once it's approved."
+
+   <Screenshot name="tutorial-signup-bring-a-school" alt="The sign-up page with the Bring a school tab open" path="/signup" />
+
+3. Fill in the school's details:
+
+   | Field | Value |
+   |---|---|
+   | Institution name | `Sunrise Academy` |
+   | Institution type | **School (K-12)** |
+   | Address | `45 Harbor View Road, Springfield` |
+   | Contact email | `office@sunrise.example` |
+   | Contact phone | `+1 555 0142` |
+   | Expected student count | `120` |
+
+   The other types are **College / University**, **Institute** and
+   **Coaching center**. The student count is "Approximate — we use this for
+   capacity planning only."
+
+4. In the **School admin** box, fill in the owner's account:
+
+   | Field | Value |
+   |---|---|
+   | First name | `Laila` |
+   | Last name | `Rahman` |
+   | Email | `owner@sunrise.example` |
+   | Password | `Schola@2026` |
+   | Confirm password | `Schola@2026` |
+
+   The strength meter under **Password** turns green and reads
+   **Strength: Strong** once all four rules are ticked: at least 8
+   characters, one uppercase letter, one lowercase letter, one digit.
+
+   <Screenshot name="tutorial-signup-filled" alt="The application filled in for Sunrise Academy, with the School admin box and a Strong password" path="/signup" />
+
+5. Click **Submit application**. The button reads **Submitting…** while it
+   works. A toast says **"Application received."** and the form is replaced
+   by **"Thanks — your application is in."**, the line "Your application has
+   been received. We've also sent a verification email — please confirm your
+   address while we review.", and the address it was sent to.
+
+   <Screenshot name="tutorial-signup-application-received" alt="The confirmation: Thanks — your application is in." path="/signup" />
+
+6. **Verify the email (optional).** Open the verification email. In
+   development with the console transport, find the line
+   `[email/console] would have sent email` with the subject "Verify your
+   Schola email" in the API log — it holds a 6-digit code and a link. Either
+   open the link (`/verify?token=…`), or go to <Route path="/verify" />,
+   type **Email** `owner@sunrise.example` and the **Code**, and click
+   **Verify code**. The page answers "Your email is verified. You can log in
+   now." The code and the link expire after 72 hours
+   (`EMAIL_VERIFICATION_TTL_HOURS`; the email states the configured value).
+
+   No email? Type the address and click **Send a new code** under the form. The
+   toast always says "If that email has an unverified account, a new link and
+   code are on the way." — the same answer whether or not the account exists,
+   and at most one email per address per minute. While the school is pending,
+   the owner's account is switched off, so this sends nothing for Laila yet;
+   approval verifies her email anyway.
+
+   <Screenshot name="tutorial-verify-page" alt="The Verify your email page with Email, Code, Verify code and the Send a new code link" path="/verify" />
+
+7. Try to sign in. Open <Route path="/login" />, enter `owner@sunrise.example`
+   and `Schola@2026`, and click **Log in**. Sign-in is refused with
+   **"Your school's application is waiting for approval. You'll get an email when it's approved."** under the password. That is expected: the account switches on
+   only when the school is approved.
+
+</Steps>
+
+<Aside type="note" title="Verifying is optional for an owner">
+Approving the school marks the owner's email as verified at the same moment
+it switches the account on, so Laila can sign in right after approval even if
+she never used the code. Personal accounts (the **Personal account** tab) do
+need the code before their first sign-in.
+</Aside>
+
+## Check your work
+
+- As the Super Admin, <Route path="/platform/approvals" /> now lists
+  **Sunrise Academy** — type School, contact `office@sunrise.example`,
+  students `~120`, status **Pending**. You open it in the next chapter.
+- Signing in as `owner@sunrise.example` gives "Your school's application is
+  waiting for approval. You'll get an email when it's approved.", not
+  "Invalid email or password." (that one means a typo).
+
+## If something goes wrong
+
+<Aside type="note" title="When the email cannot be delivered">
+Sending the two emails is best-effort. If the email provider fails (for example
+a Resend key with an unverified sending domain, or a reserved `*.example`
+address), the API logs the failure and carries on: the application is saved,
+the Super Admin is notified, the audit entry is written and the form still
+shows "Thanks — your application is in." Only the emails are missing, and
+the owner does not need the code: approval verifies the address.
+</Aside>
+
+- **"An account with this admin email already exists. Log in with that
+  account and use the in-app school setup, or enter a different admin
+  email."** — the admin email is taken, for example by an earlier attempt.
+  Use another email, or sign in with the existing account and register the
+  school from <Route path="/welcome" />.
+- **Field errors** — the institution name needs 2–120 characters, the
+  address 2–240, the phone 7–20 digits, spaces or dashes with an optional
+  leading `+`, and the two passwords must match ("Passwords don't match.").
+- **"Verify your email before logging in. Use the link or the 6-digit code we
+  sent."** — you are signing in with a personal account that is not verified
+  yet. School owners see the "waiting for approval" message instead until
+  approval.
+
+## Under the hood
+
+- <SourceFile path="apps/web/src/app/(auth)/signup/signup-form.tsx" /> — the **Bring a school** form.
+- <SourceFile path="apps/api/src/modules/schools/schools.service.ts" symbol="signup" /> — creates the account and the school, sends the emails, notifies Super Admins.
+- <SourceFile path="apps/web/src/app/(auth)/verify/verify-content.tsx" /> — the link and code verification page, and **Send a new code** (<Api method="POST" path="auth/verify-email/resend" />, always `202`).
+
+## Learn more
+
+<CardGrid>
+  <LinkCard title="Sign up and sign in" description="Both sign-up tabs, verification and every sign-in message." href="/features/accounts/sign-up-and-sign-in/" />
+  <LinkCard title="Onboarding and welcome" description="Registering a school from an existing account." href="/features/accounts/onboarding-and-welcome/" />
+</CardGrid>
+
+## Next
+
+<LinkCard title="3. Approve the school" description="As the Super Admin, review Sunrise Academy and switch it on." href="/tutorial/approve-the-school/" />

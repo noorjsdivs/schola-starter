@@ -1,0 +1,27 @@
+Schola Starter — License
+
+Copyright (c) 2026 Noor Mohammad (ReactBD). All rights reserved, except as
+granted below.
+
+You may:
+
+  1. Use, copy and modify the files in this repository while following the
+     course "Build a Multi-Tenant School SaaS: Next.js 16 & Express 5".
+  2. Include them, modified or not, in applications you build from the
+     course, including commercial applications you run or ship to clients.
+
+You may not:
+
+  1. Sell, sublicense or redistribute this repository, or a substantial part
+     of it, as a standalone asset pack, template or course material.
+  2. Republish the documentation content as your own documentation for a
+     product other than one you built from the course.
+
+The marketing photographs in assets/apps/web/public/marketing/ are included
+for learning. Replace them with images you hold the rights to before you
+launch a real product.
+
+THE FILES ARE PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES OR
+OTHER LIABILITY ARISING FROM, OUT OF OR IN CONNECTION WITH THE FILES OR THEIR
+USE.

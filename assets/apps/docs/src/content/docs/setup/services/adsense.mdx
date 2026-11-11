@@ -1,0 +1,191 @@
+---
+title: Google AdSense
+description: How Schola shows Google ads on the public website and these docs — ads.txt, the publisher ID, where ads may and may never appear, and how to turn them on or off per deployment.
+---
+
+import { Aside, Steps, Card, CardGrid, LinkCard, Badge } from '@astrojs/starlight/components';
+import Pipeline from '../../../../components/Pipeline.astro';
+import SourceFile from '../../../../components/SourceFile.astro';
+import Route from '../../../../components/Route.astro';
+
+[Google AdSense](https://adsense.google.com) shows Google ads on a website and
+pays the site owner (the *publisher*) a share of the revenue. Schola uses
+**Auto ads**: each page loads one AdSense script, and Google decides where the
+ads go. Formats, placements and blocked ad categories are all set in the
+AdSense dashboard, not in code.
+
+Ads run on the **public marketing site** and on **these docs** — never inside
+the product. Sign-in pages, the school app, the platform console and error
+pages stay ad-free.
+
+## At a glance
+
+<CardGrid>
+  <Card title="Publisher ID" icon="information">
+    `pub-6542623777003381` — written `ca-pub-6542623777003381` in the ad code.
+  </Card>
+  <Card title="Environment variables" icon="setting">
+    `NEXT_PUBLIC_ADSENSE_CLIENT` (web) · `PUBLIC_ADSENSE_CLIENT` (docs). Not
+    secrets.
+  </Card>
+  <Card title="ads.txt" icon="document">
+    Repo-root `ads.txt`, served by each site from its `public/` folder at
+    `/ads.txt`.
+  </Card>
+  <Card title="Local development" icon="laptop">
+    Off. `pnpm dev` never loads ads; only production builds do.
+  </Card>
+</CardGrid>
+
+## How it fits together
+
+<Pipeline
+  caption="The same publisher ID appears in ads.txt, the env files and every page's HTML."
+  steps={[
+    { label: 'ads.txt', icon: 'file-text', note: 'Authorises Google to sell the inventory' },
+    { label: '.env.production', icon: 'settings', note: 'The ca-pub ID for each app' },
+    { label: 'Build', icon: 'terminal', note: 'ID inlined at build time' },
+    { label: 'Page head', icon: 'search', note: 'Meta tag + adsbygoogle.js' },
+    { label: 'Auto ads', icon: 'megaphone', note: 'Google places the ads' },
+  ]}
+/>
+
+1. **`ads.txt`** tells ad buyers that Google is allowed to sell ad space on the
+   site. Without it, AdSense warns "Earnings at risk".
+2. The **publisher ID** in each app's committed `.env.production` turns the ad
+   code on for that app's production build.
+3. On a page that may show ads, the `<head>` gets the AdSense script
+   (`adsbygoogle.js?client=ca-pub-…`). Every page also gets a
+   `google-adsense-account` meta tag, which only proves site ownership to
+   AdSense and shows no ads by itself.
+
+## Where ads appear
+
+| Surface | Ad script | Ownership meta tag |
+|---|---|---|
+| Marketing pages — <Route path="/" />, `/features`, `/pricing`, `/about`, `/academics`, `/admissions`, `/news`, `/events`, `/faq`, `/contact`, `/legal/*` | <Badge text="yes" variant="success" /> | Yes |
+| Every page of these docs | <Badge text="yes" variant="success" /> | Yes |
+| Sign-in and sign-up — `/login`, `/signup`, `/verify`, `/forgot-password`, `/reset-password` | <Badge text="never" variant="danger" /> | Yes |
+| The school app `/app/*`, the platform console `/platform/*`, `/welcome`, `/onboarding/*`, `/admin-transfer` | <Badge text="never" variant="danger" /> | Yes |
+| "Page not found" on the web app and on the docs | <Badge text="never" variant="danger" /> | Yes |
+
+<Aside type="caution" title="Keep ads off product screens">
+AdSense does not allow ads on screens without publisher content — sign-in
+pages, dashboards and error pages. That is why the script lives only in the
+marketing layout and the docs `<head>`. Never add it to the `(auth)`,
+`(tenant)` or `(super-admin)` layouts.
+</Aside>
+
+## Configuration
+
+| Variable | App | Lives in | Value |
+|---|---|---|---|
+| `NEXT_PUBLIC_ADSENSE_CLIENT` | Web (`apps/web`) | `apps/web/.env.production` (committed) | `ca-pub-6542623777003381` |
+| `PUBLIC_ADSENSE_CLIENT` | Docs (`apps/docs`) | `apps/docs/.env.production` (committed) | `ca-pub-6542623777003381` |
+
+- **Not secrets.** The ID is printed in every page's HTML and in `ads.txt`, so
+  it is committed with the other non-secret production values.
+- **Production builds only.** Next.js reads `.env.production` for
+  `next build` / `next start`, and Astro for `astro build`. `pnpm dev` reads
+  neither, and the root `.env` / `test.env` keep both keys blank — so no ads,
+  ad requests or accidental clicks during development.
+- **Switch off per deployment.** Set the variable to blank on the host (for
+  example on staging) and rebuild.
+- **Validated.** A value that isn't `ca-pub-` followed by 16 digits is ignored
+  and no script is rendered.
+- **Build-time values.** Both are inlined into the build; rebuild after a
+  change. Both are listed in `turbo.json` `globalEnv`, so a value set on the
+  host reaches the build.
+
+## ads.txt
+
+The repo-root **`ads.txt`** is the source. Each site serves an identical copy
+from its `public/` folder:
+
+| File | Served at |
+|---|---|
+| `apps/web/public/ads.txt` | `https://schola.reactbd.com/ads.txt` |
+| `apps/docs/public/ads.txt` | `/ads.txt` on the docs host |
+
+Its single line:
+
+```text
+google.com, pub-6542623777003381, DIRECT, f08c47fec0942fa0
+```
+
+Change the three files together.
+<SourceFile path="apps/web/src/lib/ads.test.ts" /> fails if a copy drifts from
+the root file, or if the publisher ID no longer matches the one in the
+`.env.production` files.
+
+## Set up a publisher account
+
+<Steps>
+
+1. Sign in at [adsense.google.com](https://adsense.google.com) with the Google
+   account that should receive payments, and add the site
+   `schola.reactbd.com`.
+2. Open **Account → Settings → Account information** and copy the
+   **Publisher ID** (`pub-…`). Put `ca-pub-<number>` in
+   `apps/web/.env.production` as `NEXT_PUBLIC_ADSENSE_CLIENT` and in
+   `apps/docs/.env.production` as `PUBLIC_ADSENSE_CLIENT`.
+3. Open **Sites → your site → ads.txt** and copy the line it shows into the
+   root `ads.txt` and both `public/ads.txt` copies.
+4. Rebuild and deploy both sites.
+5. Check a marketing page's source for `adsbygoogle.js?client=ca-pub-…`, and
+   open `/ads.txt` on each host.
+6. Back in AdSense, request a site review. Approval takes from a few days to a
+   few weeks.
+7. After approval, open **Ads → By site**, switch **Auto ads** on and choose
+   the formats. If the docs live on their own domain, add that domain as a
+   second site.
+
+</Steps>
+
+## Check it locally
+
+Ads never load under `pnpm dev`. To see the production markup:
+
+```sh
+pnpm --filter @schola/web build && pnpm --filter @schola/web start   # http://localhost:3000
+pnpm --filter @schola/docs build && pnpm --filter @schola/docs preview  # http://localhost:3002
+```
+
+Stop `pnpm dev` first — both use the same ports. Then view the source of a
+marketing page or a docs page. AdSense itself serves no ads on `localhost`, so
+an empty space where an ad would be is expected.
+
+## How the code uses it
+
+- <SourceFile path="apps/web/src/components/seo/adsense.tsx" symbol="AdSenseScript" /> — renders the async AdSense `<script>`, or nothing when the ID is blank. A plain `<script>` (not `next/script`): React 19 moves async scripts into `<head>`, and AdSense rejects the `data-nscript` attribute `next/script` adds.
+- <SourceFile path="apps/web/src/app/(marketing)/layout.tsx" /> — the only web layout that renders it.
+- <SourceFile path="apps/web/src/app/layout.tsx" /> — adds the `google-adsense-account` meta tag through the Metadata API's `other` field.
+- <SourceFile path="apps/web/src/lib/env.ts" symbol="adsenseClient" /> — reads and validates `NEXT_PUBLIC_ADSENSE_CLIENT`.
+- <SourceFile path="apps/docs/src/components/overrides/Head.astro" /> — Starlight `<head>` override: meta tag on every page, script on every page except "Page not found".
+
+## Manual ad units
+
+Auto ads need no code. For a fixed placement — say, a banner at the end of a
+news article — create a display unit in **Ads → By ad unit** to get its
+`data-ad-slot` ID, then render the `<ins class="adsbygoogle" …>` element and
+the `(adsbygoogle = window.adsbygoogle || []).push({})` call on that marketing
+page. Keep units off `/app`, `/platform` and the auth pages.
+
+## Troubleshooting
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| No ads show | Site not approved yet, or you are on `localhost` | Wait for the AdSense review; check the script is in the page source. |
+| AdSense says `ads.txt` is missing ("Earnings at risk") | `/ads.txt` isn't at the root of that host, or AdSense hasn't recrawled yet | Open `/ads.txt` on each host (expect status 200 and the line above); redeploy; allow a few days. |
+| No AdSense script in the page source | The variable is blank or malformed in that build | Check the app's `.env.production` (or the host variable) and rebuild. |
+| Console: "AdSense head tag doesn't support data-nscript attribute" | The script was loaded with `next/script` | Use `AdSenseScript` (a plain async `<script>`). |
+| Ads on a sign-in or dashboard page | A layout outside `(marketing)` renders `AdSenseScript` | Remove it there. |
+
+## Related pages
+
+<CardGrid>
+  <LinkCard title="Public website" description="The marketing pages that carry ads, and their SEO." href="/features/public-website/" />
+  <LinkCard title="Environment variables" description="Every variable, including the two AdSense keys." href="/reference/environment-variables/" />
+  <LinkCard title="Deployment" description="Per-app .env.production files and build-time values." href="/operations/deployment/" />
+  <LinkCard title="Editing the docs" description="How this site is built and deployed." href="/operations/editing-the-docs/" />
+</CardGrid>

@@ -1,0 +1,458 @@
+---
+title: Known issues
+description: Every problem still open in the Schola code after the latest round of fixes, grouped by area, with its severity, impact, where it lives in the code and the page that explains it, followed by what this release fixed.
+---
+
+import { Aside, Badge, Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+import SourceFile from '../../../components/SourceFile.astro';
+
+Schola is honest about its rough edges. Every page in this guide that found
+something unfinished or wrong in the code says so in a warning box. This page
+collects all of those still open in one list, so a developer can plan the next
+fixes and a school can judge the risks before going live. Each entry was
+checked against the current code; anything fixed since a page was written is
+listed under [Fixed in this release](#fixed-in-this-release) instead.
+
+:::caution[Act on these first]
+- **CI is switched off.** The GitHub Actions workflow sits in
+  `_.github/workflows/ci.yml`; GitHub only runs workflows from `.github/`, so
+  pushes and pull requests are not checked. See [below](#ci-does-not-run).
+- **Security findings are not listed on this public site.** They are tracked in
+  the private repository, in `docs/security-notes.md`.
+:::
+
+## How to read this page
+
+Each issue has a severity, a one-line description, its impact, where it lives
+in the code and a link to the page that discusses it.
+
+| Severity | Meaning |
+| --- | --- |
+| <Badge text="high" variant="danger" /> | A security exposure, or a way to lose or corrupt data or access. Fix before production. |
+| <Badge text="medium" variant="caution" /> | Wrong or missing behaviour that people will run into in normal use. |
+| <Badge text="low" variant="note" /> | A rough edge, a cosmetic problem, or a gap between the written plan and the code. |
+
+<CardGrid>
+  <Card title="Security & privacy" icon="padlock">Tracked privately — docs/security-notes.md</Card>
+  <Card title="Data integrity" icon="database">13 open — 1 high, 4 medium, 8 low</Card>
+  <Card title="Missing or incomplete features" icon="puzzle">20 open — 7 medium, 13 low</Card>
+  <Card title="UX gaps" icon="laptop">10 open — 2 medium, 8 low</Card>
+  <Card title="Platform, deployment & configuration" icon="server">12 open — 1 high, 3 medium, 8 low</Card>
+  <Card title="Docs & the original spec drift" icon="open-book">8 open — 2 medium, 6 low</Card>
+</CardGrid>
+
+## Act on these first
+
+### CI does not run
+
+<Badge text="high" variant="danger" /> The workflow that runs typecheck, lint,
+unit, integration and end-to-end tests is at `_.github/workflows/ci.yml`.
+Commit `dff8604` renamed `.github` to `_.github`, and GitHub only runs
+workflows from `.github/workflows/`.
+
+**Impact.** No pull request or push is checked. Regressions reach `main`
+unless someone runs `pnpm typecheck && pnpm lint && pnpm test` and
+`pnpm test:e2e` by hand.
+
+**What to do.** Rename the folder back to `.github` (and keep the secrets the
+workflow needs in the repository's Actions settings, never in a file).
+
+<SourceFile path="_.github/workflows/ci.yml" /> · [CI](/operations/ci/)
+
+## Security and privacy
+
+Security findings — anything that could expose data or accounts — are kept out
+of this public site. They are tracked in the private repository, in
+`docs/security-notes.md`, with their severity, impact and the code involved.
+Review them before each production release.
+
+
+## Data integrity
+
+- <Badge text="high" variant="danger" /> **Rejecting a quick application
+  switches off the applicant's personal account.** `rejectSchool` deactivates
+  and soft-deletes the owner, which for an application from
+  `/onboarding/school` is the person's existing account. **Impact:** the
+  applicant loses their sign-in entirely and never sees the "not approved"
+  screens. <SourceFile path="apps/api/src/modules/schools/schools.service.ts" symbol="rejectSchool" /> ·
+  [Onboarding and welcome](/features/accounts/onboarding-and-welcome/#edge-cases-and-gotchas)
+- <Badge text="medium" variant="caution" /> **Two accepted transfer links make
+  two School Admins.** Older admin-transfer links stay valid, and accepting one
+  removes School Admin only from the original nominator. **Impact:** ownership
+  is ambiguous. <SourceFile path="apps/api/src/modules/admin-transfer/admin-transfer.service.ts" /> ·
+  [Admin transfer](/features/school/admin-transfer/#edge-cases-and-gotchas)
+- <Badge text="medium" variant="caution" /> **Stripe money for an already
+  settled invoice is neither recorded nor refunded.** The webhook records
+  `min(charged, remaining)` and stops at zero. **Impact:** a family can be
+  charged twice with no record in Schola; refunds are manual in the Stripe
+  Dashboard. <SourceFile path="apps/api/src/services/stripe/fulfill.ts" /> ·
+  [Online payments](/features/finance/online-payments/)
+- <Badge text="medium" variant="caution" /> **Moving a student hides their marks
+  in the gradebook grid.** A mark keeps the `sectionId` it was first saved with,
+  and the grid only shows marks of the current section. **Impact:** marks look
+  missing and re-typing them doesn't fix the grid (results and report cards are
+  still right). <SourceFile path="apps/api/src/modules/gradebook/grades.routes.ts" /> ·
+  [Gradebook](/features/assessment/gradebook/#edge-cases-and-gotchas)
+- <Badge text="medium" variant="caution" /> **An existing account added as a
+  parent gets no Parent role.** `POST /parents` links the account to the record
+  but grants no role. **Impact:** that person still lands on `/welcome` and
+  can't see their children. <SourceFile path="apps/api/src/modules/people/parents.routes.ts" /> ·
+  [Parents](/features/people/parents/)
+- <Badge text="low" variant="note" /> **Enrolling an applicant is not one
+  transaction.** Student, parent, enrollment and application are written one
+  after another. **Impact:** an unexpected database error mid-way leaves partial
+  records. <SourceFile path="apps/api/src/modules/operations/admissions.routes.ts" /> ·
+  [Admissions](/features/campus/admissions/#edge-cases-and-gotchas)
+- <Badge text="low" variant="note" /> **Audit entries are written by each route,
+  after the change, without a transaction.** A failed insert is only logged,
+  and a new route that forgets `auditLogger.log()` writes nothing. **Impact:**
+  gaps in the audit trail are possible. <SourceFile path="apps/api/src/services/audit.service.ts" /> ·
+  [Audit log (architecture)](/architecture/audit-log/#edge-cases-and-gotchas)
+- <Badge text="low" variant="note" /> **The announcements Sent list depends on
+  the audit log.** It is rebuilt from `audit_logs`. **Impact:** a failed audit
+  write hides an announcement that was delivered.
+  <SourceFile path="apps/api/src/modules/notifications/notifications.routes.ts" /> ·
+  [Announcements](/features/communication/announcements/)
+- <Badge text="low" variant="note" /> **Editing a bus route doesn't re-check its
+  riders.** Seats can drop below the rider count, and renamed or removed stops
+  stay on riders. **Impact:** cards like "30/20" and stops without a pickup
+  time. <SourceFile path="apps/api/src/modules/operations/transport.routes.ts" /> ·
+  [Transport](/features/campus/transport/#edge-cases-and-gotchas)
+- <Badge text="low" variant="note" /> **A hostel room's Boys / Girls setting is
+  not enforced.** **Impact:** a student can be placed in the wrong room; the
+  desk must check by eye. <SourceFile path="apps/api/src/modules/operations/hostel.routes.ts" /> ·
+  [Hostel](/features/campus/hostel/)
+- <Badge text="low" variant="note" /> **A fee structure's class is not checked
+  when billing.** `FeeStructure.classId` exists but is not on the form and
+  Generate ignores it. **Impact:** any section can be billed with any structure.
+  <SourceFile path="apps/api/src/modules/fees/fee-invoices.routes.ts" /> ·
+  [Fees](/features/finance/fees/#edge-cases-and-gotchas)
+- <Badge text="low" variant="note" /> **Role sync only adds.** Removing a key
+  from a bundle in code doesn't remove it from schools that already have it.
+  **Impact:** a revoked permission lingers until someone deletes the
+  `role_permissions` rows. <SourceFile path="apps/api/src/services/rbac/seed.ts" /> ·
+  [Permissions](/reference/permissions/)
+- <Badge text="low" variant="note" /> **The Neon identity mirror is
+  incomplete.** A password reset doesn't copy the new hash, and some sign-in
+  paths (the Firebase endpoint) don't write to it. **Impact:** the mirror is not
+  a reliable second source of truth. <SourceFile path="apps/api/src/services/identity-store.ts" /> ·
+  [Neon Postgres](/setup/services/neon-postgres/)
+
+## Missing or incomplete features
+
+- <Badge text="medium" variant="caution" /> **No way to give a student a
+  sign-in.** The student form has no email and nothing sets `Student.userId`;
+  only the demo seed links a student account. **Impact:** students cannot use
+  the student portal in a real school. <SourceFile path="packages/validation/src/people.ts" /> ·
+  [Students](/features/people/students/#edge-cases-and-gotchas)
+- <Badge text="medium" variant="caution" /> **"Ask your administrator to invite
+  this email" does not work.** Adding a teacher or staff member with an email
+  that already has an account fails; only a Super Admin can give an existing
+  account a school role. **Impact:** visitors can't be brought into a school by
+  the school itself. <SourceFile path="apps/api/src/modules/people/teachers.routes.ts" /> ·
+  [Onboarding and welcome](/features/accounts/onboarding-and-welcome/#edge-cases-and-gotchas)
+- <Badge text="medium" variant="caution" /> **No waiver button.** The waive
+  endpoint, permission and audit exist, but no screen calls it. **Impact:**
+  scholarships and discounts need direct API calls.
+  <SourceFile path="apps/web/src/app/(tenant)/app/fees/page.tsx" /> ·
+  [Fees](/features/finance/fees/)
+- <Badge text="medium" variant="caution" /> **Platform settings are stored but
+  not applied.** Branding, locale, email templates and feature flags are saved
+  and audited, but no other code reads them. **Impact:** changing them has no
+  effect on emails, new schools or sign-up.
+  <SourceFile path="apps/api/src/modules/system-settings/system-settings.service.ts" /> ·
+  [Platform settings](/features/platform/settings/)
+- <Badge text="medium" variant="caution" /> **No "publish results" step.** Marks
+  appear on student, parent and report-card views the moment a teacher saves.
+  **Impact:** half-entered grids are visible to families.
+  <SourceFile path="apps/api/src/modules/gradebook/grades.routes.ts" /> ·
+  [Gradebook](/features/assessment/gradebook/#edge-cases-and-gotchas)
+- <Badge text="medium" variant="caution" /> **Payroll "Pay" collects money
+  instead of paying it out.** Stripe Checkout charges a card into the single
+  platform Stripe account; there is no Stripe Connect per school. **Impact:**
+  it records settlement but sends nothing to the employee or the school.
+  <SourceFile path="apps/api/src/services/stripe/checkout.ts" /> ·
+  [Stripe](/setup/services/stripe/)
+- <Badge text="medium" variant="caution" /> **No encryption key rotation.** One
+  master key at a time; the `rotate:keys` script mentioned in
+  `docs/services/encryption.md` does not exist. **Impact:** changing or losing
+  the key makes all encrypted PII unreadable.
+  <SourceFile path="packages/db/src/crypto.ts" /> ·
+  [Encryption](/setup/services/encryption/)
+- <Badge text="low" variant="note" /> **Remarks written on the Remarks page never
+  reach a report card.** The report card prints only remarks linked to the exam,
+  and the page has no exam field. <SourceFile path="apps/web/src/app/(tenant)/app/remarks/page.tsx" /> ·
+  [Remarks](/features/daily/remarks/)
+- <Badge text="low" variant="note" /> **Leave sends no notifications.** Neither a
+  new request nor a decision notifies anyone (the drawer now says so).
+  <SourceFile path="apps/api/src/modules/operations/leave.routes.ts" /> ·
+  [Leave](/features/daily/leave/#edge-cases-and-gotchas)
+- <Badge text="low" variant="note" /> **Few events notify anyone.**
+  `school.rejected` and `admin_transfer.*` notification types are never
+  created, and payments, grades or decisions notify no one.
+  <SourceFile path="packages/db/src/models/notification.ts" /> ·
+  [Notifications](/features/communication/notifications/)
+- <Badge text="low" variant="note" /> **No "request more info", and no email to
+  Super Admins** for new applications (the original spec asks for both).
+  <SourceFile path="apps/api/src/modules/schools/schools.service.ts" /> ·
+  [Approvals](/features/platform/approvals/)
+- <Badge text="low" variant="note" /> **No "revoke all sessions" for a user**; Suspend is the only tool.
+  <SourceFile path="apps/api/src/modules/platform-users/platform-users.service.ts" /> ·
+  [Platform users](/features/platform/users/)
+- <Badge text="low" variant="note" /> **Nothing sets `cancelled`.** Invoices and
+  payslips honour the status but no endpoint cancels them.
+  <SourceFile path="packages/db/src/models/fee.ts" /> ·
+  [Statuses](/reference/statuses/)
+- <Badge text="low" variant="note" /> **Fee frequency and "due day" do nothing.**
+  Invoices are only created by **Generate**, with the due date typed.
+  <SourceFile path="apps/api/src/modules/fees/fee-invoices.routes.ts" /> ·
+  [Fees](/features/finance/fees/#edge-cases-and-gotchas)
+- <Badge text="low" variant="note" /> **The timetable grid can't add a first
+  Saturday period, any Sunday period or a 7th period**, though the API accepts
+  them. <SourceFile path="apps/web/src/app/(tenant)/app/timetable/page.tsx" /> ·
+  [Timetable](/features/daily/timetable/)
+- <Badge text="low" variant="note" /> **No per-person permissions.** There is no
+  editor for role bundles or extra grants, so the demo Librarian (a `staff`
+  member) can only browse the library. <SourceFile path="apps/api/src/services/rbac/permissions.ts" /> ·
+  [Staff portal](/features/portals/staff/)
+- <Badge text="low" variant="note" /> **ImageKit is required but unused.** No
+  upload route or screen exists, yet production demands the three ImageKit keys.
+  <SourceFile path="apps/api/src/services/imagekit.service.ts" /> ·
+  [ImageKit](/setup/services/imagekit/)
+- <Badge text="low" variant="note" /> **No cursor pagination, and the audit pages
+  have no pager.** Every list is offset-paginated (the original spec asks for cursors);
+  the audit logs show the newest 100 entries only.
+  <SourceFile path="apps/api/src/repositories/audit.repo.ts" /> ·
+  [API conventions](/architecture/api-conventions/)
+- <Badge text="low" variant="note" /> **No school switcher.** A member of two
+  active schools always works in the first one found.
+  <SourceFile path="apps/api/src/modules/auth/auth.service.ts" /> ·
+  [Roles](/reference/roles/#which-school-the-session-uses)
+- <Badge text="low" variant="note" /> **The Firebase Google endpoint has no
+  caller.** `POST /auth/google` works, but no button uses it, and unconfigured
+  it answers `INTERNAL_ERROR` (503). <SourceFile path="apps/web/src/lib/firebase.ts" /> ·
+  [Social sign-in](/setup/services/social-sign-in/)
+
+## UX gaps
+
+- <Badge text="medium" variant="caution" /> **The school dashboard always shows
+  dollars.** It formats money with a fixed `en-US` / `USD` formatter, whatever
+  the school's currency. <SourceFile path="apps/web/src/app/(tenant)/app/page.tsx" /> ·
+  [School dashboard](/features/school/dashboard/)
+- <Badge text="medium" variant="caution" /> **The public contact form sends
+  nothing itself.** It only opens a `mailto:` link and clears the form; no copy
+  is stored. **Impact:** visitors without a mail app lose their message.
+  <SourceFile path="apps/web/src/app/(marketing)/contact/contact-form.tsx" /> ·
+  [Public website](/features/public-website/#edge-cases-and-gotchas)
+- <Badge text="low" variant="note" /> **Reports shows both CSV buttons to anyone
+  with `report:export`.** The one without its read key answers `403` JSON.
+  <SourceFile path="apps/web/src/app/(tenant)/app/reports/page.tsx" /> ·
+  [Reports](/features/insight/reports/)
+- <Badge text="low" variant="note" /> **Principals can click register buttons that
+  never save.** Present / Absent respond, but there is no Save for them.
+  <SourceFile path="apps/web/src/app/(tenant)/app/attendance/page.tsx" /> ·
+  [Attendance](/features/daily/attendance/)
+- <Badge text="low" variant="note" /> **A newly approved owner must sign in
+  again.** The open session has no school until the token renews (up to 15
+  minutes). <SourceFile path="apps/web/src/app/welcome/welcome-view.tsx" /> ·
+  [Onboarding and welcome](/features/accounts/onboarding-and-welcome/)
+- <Badge text="low" variant="note" /> **Password and social sign-in land
+  school-less accounts on different pages** (`/welcome` vs
+  `/onboarding/school`). <SourceFile path="apps/api/src/modules/auth/oauth.service.ts" /> ·
+  [Sign up and sign in](/features/accounts/sign-up-and-sign-in/#edge-cases-and-gotchas)
+- <Badge text="low" variant="note" /> **Fees: due dates can show a day early
+  west of UTC, and the invoice table has no filters or search.**
+  <SourceFile path="apps/web/src/app/(tenant)/app/fees/page.tsx" /> ·
+  [Fees](/features/finance/fees/#edge-cases-and-gotchas)
+- <Badge text="low" variant="note" /> **Payroll: no employee name in the CSV;
+  deductions larger than pay fail with "Something went wrong."; "Generate
+  payroll" is not permission-gated in the UI.**
+  <SourceFile path="apps/web/src/app/(tenant)/app/payroll/page.tsx" /> ·
+  [Payroll](/features/finance/payroll/#edge-cases-and-gotchas)
+- <Badge text="low" variant="note" /> **Staff checkout quirks.** Paying from a
+  student's profile returns to `/app/fees`, and the staff checkout route writes
+  no `fee.checkout.open` audit entry. <SourceFile path="apps/api/src/modules/fees/fee-invoices.routes.ts" /> ·
+  [Online payments](/features/finance/online-payments/)
+- <Badge text="low" variant="note" /> **Only the newest 20 notifications are
+  reachable.** Neither the drawer nor the Notifications page pages further.
+  <SourceFile path="apps/web/src/app/(tenant)/app/notifications/page.tsx" /> ·
+  [Notifications](/features/communication/notifications/)
+
+## Platform, deployment and configuration
+
+- <Badge text="high" variant="danger" /> **CI is switched off.** See
+  [the entry above](#ci-does-not-run). <SourceFile path="_.github/workflows/ci.yml" /> ·
+  [CI](/operations/ci/)
+- <Badge text="medium" variant="caution" /> **`apps/web/proxy.ts` is never
+  loaded.** Next.js looks for it next to `src/app`, one level down. **Impact:** no
+  edge redirects or proxy rewrite; protected pages flash "Checking access" and
+  redirect in the browser. <SourceFile path="apps/web/proxy.ts" /> ·
+  [Web routes](/reference/web-routes/)
+- <Badge text="medium" variant="caution" /> **The compiled API can't start.**
+  `node dist/index.js` can't load the workspace packages' `.ts` sources;
+  production must run `tsx src/index.ts` (not verified by running).
+  <SourceFile path="apps/api/package.json" /> ·
+  [Deployment](/operations/deployment/)
+- <Badge text="medium" variant="caution" /> **Existing databases must drop an old
+  token index.** The plain `expiresAt_1` index on `refreshtokens` and
+  `singleusetokens` blocks the TTL index the boot build now creates. **Impact:**
+  the boot log reports an index failure and old tokens are never cleaned up.
+  <SourceFile path="packages/db/src/models/refresh-token.ts" /> ·
+  [Deployment](/operations/deployment/#set-up-mongodb-atlas)
+- <Badge text="low" variant="note" /> **The web app ignores the root env files in
+  development.** Next.js only reads `apps/web/`, so `NEXT_PUBLIC_*` values in
+  `.env` / `test.env` have no effect. <SourceFile path="apps/web/next.config.ts" /> ·
+  [Environment variables](/setup/environment-variables/)
+- <Badge text="low" variant="note" /> **Env file drift.** Some keys in `.env` are
+  read by no code, `ARGON2_*` are read but missing from the env files, and the
+  unused client schema defaults the API to port 4000.
+  <SourceFile path="packages/config/src/client.ts" /> ·
+  [Environment variables reference](/reference/environment-variables/)
+- <Badge text="low" variant="note" /> **SMTP is not a runtime fallback.** It is
+  used only when no Resend key is set; a failing Resend send is not retried.
+  <SourceFile path="apps/api/src/services/email/index.ts" /> ·
+  [Email](/setup/services/email/)
+- <Badge text="low" variant="note" /> **Suspension reaches other API instances
+  within 10 seconds.** School status is cached per process; only the instance
+  that suspended clears its cache at once.
+  <SourceFile path="apps/api/src/services/school-status.ts" /> ·
+  [Schools](/features/platform/schools/#what-suspension-does)
+- <Badge text="low" variant="note" /> **The platform audit route passes two guard
+  stacks**, counting the super-admin rate limit twice.
+  <SourceFile path="apps/api/src/app.ts" /> ·
+  [API endpoints](/reference/api-endpoints/#edge-cases-and-gotchas)
+- <Badge text="low" variant="note" /> **The Stripe CLI listener port is fixed at
+  8000.** Changing `API_PORT` needs a matching script change.
+  <SourceFile path="apps/api/package.json" /> ·
+  [Running locally](/setup/running-locally/)
+- <Badge text="low" variant="note" /> **Declared but unused packages.** `apps/web`
+  lists `@schola/ui` and `@schola/config` but imports neither.
+  <SourceFile path="apps/web/package.json" /> ·
+  [Monorepo packages](/architecture/monorepo-packages/)
+- <Badge text="low" variant="note" /> **Test tooling gaps.** `@vitest/coverage-v8`
+  is not installed, coverage budgets are not enforced, and there is no Lighthouse
+  CI. <SourceFile path="apps/api/vitest.config.ts" /> ·
+  [Testing](/operations/testing/#edge-cases-and-gotchas)
+
+## Docs and the original spec drift
+
+- <Badge text="medium" variant="caution" /> **No lint rule guards tenant
+  isolation.** No ESLint rule checks that queries go through `withTenant` or
+  bans `$where`; isolation relies on review and integration tests.
+  <SourceFile path="eslint.config.js" /> ·
+  [Multi-tenancy](/architecture/multi-tenancy/#edge-cases-and-gotchas)
+- <Badge text="medium" variant="caution" /> **Marketing copy the code doesn't
+  back.** Pricing plans aren't enforced, schools can't narrow role permissions,
+  few events email anyone, and admissions sends no parent invite.
+  <SourceFile path="apps/web/src/app/(marketing)/pricing/page.tsx" /> ·
+  [Public website](/features/public-website/#edge-cases-and-gotchas)
+- <Badge text="low" variant="note" /> **Layering differs from the original spec.** There is no `middleware/tenant.ts` or `middleware/audit.ts`,
+  `withTenant` doesn't audit, handlers call `auditLogger.log()` themselves, and
+  `withSuperAdmin` has no callers. <SourceFile path="apps/api/src/repositories/with-tenant.ts" /> ·
+  [Request lifecycle](/architecture/request-lifecycle/#edge-cases-and-gotchas)
+- <Badge text="low" variant="note" /> **The Vice Principal bundle is fixed** (23
+  keys), though the original spec calls it configurable.
+  <SourceFile path="apps/api/src/services/rbac/permissions.ts" /> ·
+  [RBAC](/architecture/rbac/)
+- <Badge text="low" variant="note" /> **`user:impersonate` is documented but
+  doesn't exist.** <SourceFile path="docs/permissions.md" /> ·
+  [Permissions](/reference/permissions/#edge-cases-and-gotchas)
+- <Badge text="low" variant="note" /> **Library versions differ from the original spec and
+  the README.** TanStack Table v9 (the original spec: v8), `next --webpack` (the original spec: Turbopack),
+  and the README's Next.js / TypeScript / ESLint versions are behind.
+  <SourceFile path="apps/web/package.json" /> ·
+  [Introduction](/start-here/introduction/)
+- <Badge text="low" variant="note" /> **CI and test plan drift.** E2E runs on every
+  pull request with no release-branch trigger, comments still point at
+  `.github/`, and the original spec's
+  signup → approval journey is an integration test, not Playwright.
+  <SourceFile path="_.github/workflows/ci.yml" /> ·
+  [CI](/operations/ci/)
+- <Badge text="low" variant="note" /> **PDF branding drift.** The PDF `brand` is
+  blue `#3457D5` (the app is cyan), "Inter" is declared but never registered, and
+  there is no shared header and footer. <SourceFile path="packages/ui/src/pdf-tokens.ts" /> ·
+  [PDFs and media](/architecture/pdfs-and-media/)
+
+## Fixed in this release
+
+These were open when the guide was first written and are now fixed in the code.
+The pages above describe the new behaviour.
+
+**Permissions and access**
+
+- The Accountant holds `academic_year:read`, `class:read`, `section:read`, `subject:read` and `staff_attendance:read:own`, so Fees no longer answers `403` and **My attendance** shows records.
+- Teachers hold `academic_year:read`, so Classes and Exams no longer show a false "Create an academic year first".
+- School Admin, Principal and Vice Principal hold `staff_attendance:read:own`; the start-up sync adds all new grants to existing schools.
+- Each CSV export also needs its read key: fees `fee:read:tenant`, attendance `attendance:read:all`, payroll `salary:read:all`.
+- The Gradebook is read-only (saved marks, "Read only", no inputs or Save) without `grade:enter`.
+
+**Sign-in and sessions**
+
+- Suspended, pending and rejected schools refuse sign-in with `403 INACTIVE_ACCOUNT` naming the status (unless the person has another active school), and end open sessions with `401`; status is cached for 10 seconds and cleared on suspend, reactivate, approve and reject.
+- Google, Facebook and Firebase sign-in no longer re-activate inactive accounts (the redirect flow shows the `oauth_denied` message).
+- The owner of a school still waiting for approval is told "Your school's application is waiting for approval. You'll get an email when it's approved." instead of "Account is not active." (password, Google and Facebook sign-in); suspended and rejected schools keep their wording.
+- The lockout counter starts again from zero after a lock expires.
+- `POST /auth/verify-email/resend` works signed out with `{ email }` (always `202`, one email per address per minute), and `/verify` has a "Send a new code" link.
+- A password reset adds `password` to the account's `authProviders`.
+- The admin-transfer link survives sign-in: the guard keeps path, query and hash, and `safeNextPath` allows same-origin relative paths only, in the guard and the login form.
+- The development log prints cookie names, never cookie values.
+- CSRF exempt paths are matched on the full path.
+
+**Data and API behaviour**
+
+- Query validation reaches handlers: `validate()` replaces `req.query` with the parsed values, so defaults and coercion apply, and `unreadOnly` uses `queryBoolean`.
+- Exam and academic-year `PATCH` refuse an end before the start, including a single changed date checked against the stored one.
+- Deleting a student removes their `student` sign-in role at the school.
+- Re-enrolling a withdrawn or transferred student in the same year reopens the enrollment (`enrollment.reactivate`).
+- Teacher and staff creation checks the employee ID (soft-deleted records included) before creating the account, and removes the account if the record still fails.
+- Section capacity `0` means "no limit" in every API path (shared `_seats.ts`).
+- Paying a cancelled payslip answers `409`.
+- `GET /fee-invoices` returns `student: { name, admissionNumber }`.
+- The audit-log `to` date includes the whole UTC day, on the school and platform logs.
+- CSV exports prefix formula-leading cells (`=`, `+`, `-`, `@`, tab, CR) with `'`.
+- Rejecting a school sends the rejection email (the owner is loaded before the soft-delete); signup, approval and rejection email failures are logged and the flow continues.
+- Every email that follows a saved change is best-effort: adding a teacher, staff member or parent, inviting a platform user and creating a school directly answer `201` even when the email fails (the audit entry records `inviteEmail` / `ownerEmail: "failed"`), so a retry no longer hits "A user with this email already exists". Forgot password and the signed-out verification resend answer `202` either way. A signed-in resend and an admin transfer answer `503` with a clear message, and a transfer that can't be emailed is not started.
+- Staff (with an email) and parents (new accounts) get the same set-password invite as teachers.
+- Set-password invites have their own email, "Set your Schola password for *school*" with a **Set password** button, instead of the "Verify email" template; every email states its configured lifetime (`token-ttl.ts`), and the web pages no longer hard-code "1 hour" or "24 hours".
+- The report card counts attendance up to today, like the attendance tab, so approved leave written ahead no longer lowers the rate.
+- Audit snapshots store ids as 24-character strings and dates as ISO text; older `{"i0":…}` ids are shown as ids in the Before / After table.
+- The audit-log **Action** filter (school and platform) matches the start of the action name — `school.` finds every school action — with the text escaped.
+- `GET /salary-records` rows carry `employee: { name, employeeId }` (tenant-scoped, no personal data).
+- `pnpm seed -- --reset` also removes the tutorial's Sunrise Academy (`sunrise.example` is a reserved demo domain) and schools of soft-deleted owners on those domains.
+
+**Configuration and deployment**
+
+- `SMTP_SECURE` reads `true` / `false` / `1` / `0` correctly (`envBoolean`).
+- Production boot builds every model's indexes (`db-indexes.ts`); the `StaffAttendance` partial unique indexes and the token TTL indexes are fixed.
+- The seed's "Term 1 — Final" starts in 15 days and ends in 24; the library E2E test uses "Holes".
+
+**Web app**
+
+- Fees: **Record payment** is a drawer that searches a student by name or admission number and offers all their open invoices with the balance pre-filled; each open invoice row has **Record**; the invoices table has a Student column; **Generate invoices** needs `fee_structure:create`, **Record** and **Pay** need `fee:collect`.
+- Payroll: a **Mark paid** drawer (paid-on date, method, reference, notes) for `salary:pay`; Stripe **Pay** also needs `salary:pay`.
+- Payroll runs: an **Employee** column (name, employee ID, Teacher or Staff), also named in the **Mark paid** drawer.
+- Payslips print "Payment method: Bank transfer" and receipts "Bank transfer", "Cash", "Online", "Cheque" or "Other" instead of the stored code (`bank_transfer`).
+- **Create class** and **Create section** work with "No class teacher" / "No section teacher"; the timetable's "Free period" / "No teacher" and the leave drawer's "Myself" no longer fail the ID check, and a picker problem now shows a message under the field.
+- The admissions form saves with Date of birth blank.
+- Transport **New route** ignores fully blank stop rows and explains a row with a time but no name.
+- The leave drawer explains where requests and outcomes appear instead of promising a notification.
+- The audit-log pages (school and platform) have loading, error with "Try again" and empty states, and a per-entry Before / After table.
+- The platform dashboard's **Review queue** opens `/platform/approvals`.
+- The home page JSON-LD no longer declares a `/search` `SearchAction`.
+- **Load sample** applies only on pages the demo school fully covers; other pages show real data with a "Real data on this page." notice, and sample schools on platform pages have no detail links or actions.
+- Students see a **Bus, room & library** card on their dashboard.
+- The dashboard "Fees collected" chart was never broken — it animates in.
+- The admissions **Enroll** drawer offers capacity-`0` sections ("· no limit") instead of greying them out as full.
+- The sign-in form shows the API's reason for `INACTIVE_ACCOUNT` (pending approval, suspended school, …) instead of one generic message.
+- Editing a student's, parent's, teacher's, staff member's or applicant's phone, date of birth or address no longer fails with "Something went wrong" (`CastError`): a schema plugin (`applyEncryptedUpdates` in `packages/db/src/models/encrypted-field.ts`) encrypts plaintext PII in query updates, and **My profile** saves a phone number.
+- The dashboard and platform shells render a `<main id="main-content">` landmark.
+- The end-to-end suite signs in after hydration and no longer depends on data earlier runs used up (offered applicants, free library copies, untaken registers).
+
+## Related pages
+
+<CardGrid>
+  <LinkCard title="Security" description="Every spec control and how the code meets it." href="/architecture/security/" />
+  <LinkCard title="Deployment" description="Production setup and the go-live checklist." href="/operations/deployment/" />
+  <LinkCard title="Permissions" description="All 95 keys and the role matrix." href="/reference/permissions/" />
+  <LinkCard title="CI" description="The workflow that is currently switched off." href="/operations/ci/" />
+</CardGrid>

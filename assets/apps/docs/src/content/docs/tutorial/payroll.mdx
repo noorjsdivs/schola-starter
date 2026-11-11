@@ -1,0 +1,188 @@
+---
+title: 9. Payroll
+description: As the Accountant, set up two salary structures, generate November's payslips for the teacher and the office staff, mark the teacher's payslip paid and download it as a PDF.
+---
+
+import { Aside, Steps, Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+import Pipeline from '../../../components/Pipeline.astro';
+import SourceFile from '../../../components/SourceFile.astro';
+import Api from '../../../components/Api.astro';
+import Perm from '../../../components/Perm.astro';
+import Route from '../../../components/Route.astro';
+import Screenshot from '../../../components/Screenshot.astro';
+
+Payroll mirrors fees, but the money goes the other way. A **salary
+structure** is a pay scale — a base amount plus earnings and deductions. A
+**payroll run** applies a structure to chosen teachers and staff for one month
+and creates a **payslip** for each. The school then pays each payslip, either
+outside Schola (bank transfer, cash, cheque) and marks it paid, or by card with
+Stripe.
+
+## What you'll do
+
+<Pipeline
+  caption="One month of pay."
+  steps={[
+    { label: 'Structures', icon: 'list-format', note: 'Teacher, Office staff' },
+    { label: 'Generate', icon: 'banknote', note: 'November 2026' },
+    { label: 'Mark paid', icon: 'badge-check', note: 'Bank transfer' },
+    { label: 'Payslip', icon: 'file-text', note: 'PDF for the employee' },
+  ]}
+/>
+
+## Before you start
+
+- **Accountant** profile: `accountant@sunrise.example` (needs
+  <Perm name="salary_structure:create" /> and <Perm name="salary:pay" />; a
+  School Admin has them too).
+- The teacher and both staff members exist ([chapter 5](/tutorial/add-people/)).
+
+## Steps
+
+### 1. Create the salary structures
+
+<Steps>
+
+1. Click **Payroll** under **Finance**. "Salary structures and monthly payroll
+   runs." The tabs are **Salary Structures** and **Payroll Runs**; the header
+   has **Export 2026 CSV**.
+
+2. On **Salary Structures**, click **Add structure**. The **New salary
+   structure** drawer says "Base pay and components for a role."
+
+3. Type **Name** `Teacher — Grade 1` and **Base amount** `3200`.
+
+4. Click **Add component** twice and fill the two rows (name, amount, kind):
+
+   | Name | Amount | Kind |
+   |---|---|---|
+   | `Housing allowance` | `400` | **Earning** |
+   | `Income tax` | `350` | **Deduction** |
+
+   <Screenshot name="tutorial-salary-structure-form" alt="The New salary structure drawer: Teacher — Grade 1, base 3200, housing allowance and income tax" path="/app/payroll" />
+
+5. Click **Save** — **"Salary structure created."**
+
+6. Add a second structure the same way: **Name** `Office staff`, **Base
+   amount** `2400`, components `Transport allowance` `150` **Earning** and
+   `Income tax` `250` **Deduction**.
+
+   <Screenshot name="tutorial-salary-structures" alt="The Salary Structures tab with Teacher — Grade 1 and Office staff" path="/app/payroll" />
+
+</Steps>
+
+Net pay is base + earnings − deductions: **$3,250** for the teacher scale and
+**$2,300** for office staff.
+
+### 2. Generate November's payslips
+
+<Steps>
+
+1. Click **Payroll Runs**, then **Generate payroll**. The **Generate payroll**
+   card opens with **Year** `2026` and **Month** **November** already set.
+
+2. Pick **Salary structure** **Teacher — Grade 1 ($3,200.00)** and, in
+   **Teachers**, click **Omar Farouk (SUN-T001)**. (Both lists take several
+   picks: "Hold Ctrl/Cmd to multi-select.")
+
+   <Screenshot name="tutorial-payroll-generate-teacher" alt="Generate payroll for November 2026: Teacher — Grade 1 for Omar Farouk" path="/app/payroll" />
+
+3. Click **Generate** — **"Generated 1 payslip(s) (0 already existed)."**
+
+4. Click **Generate payroll** again. Pick **Office staff ($2,400.00)** and, in
+   **Non-teaching staff**, select both **Ethan Brooks (SUN-S002)** and **Priya
+   Das (SUN-S001)**. Click **Generate** — **"Generated 2 payslip(s) (0 already
+   existed)."**
+
+5. The table lists three payslips for **November 2026**, each **Pending**. The
+   **Employee** column names whose payslip each row is — the name, then the
+   employee ID and **Teacher** or **Staff** — followed by **Period**, **Net**,
+   **Status**, a **Payslip** link and **Mark paid** and **Pay** buttons.
+
+   <Screenshot name="tutorial-payroll-runs" alt="Three pending November payslips with Payslip, Mark paid and Pay" path="/app/payroll" />
+
+</Steps>
+
+### 3. Mark the teacher's payslip paid
+
+<Steps>
+
+1. On Omar Farouk's row (**SUN-T001 · Teacher**, **$3,250.00** net), click
+   **Mark paid**. The drawer **Mark as paid** reads "Omar Farouk ·
+   PAY-202611-E77A88 · November 2026 · $3,250.00. For salary paid outside
+   Schola — no card is charged."
+
+2. Keep **Paid on** (today) and **Method** **Bank transfer** (the others are
+   Cash, Cheque, Online, Other). Type **Reference (optional)** `Bank transfer
+   ref. NOV-2026-001` ("Bank transaction or cheque number.") and **Notes
+   (optional)** `November salary`.
+
+   <Screenshot name="tutorial-payroll-mark-paid" alt="The Mark as paid drawer for PAY-202611-E77A88, bank transfer with a reference" path="/app/payroll" />
+
+3. Click **Mark as paid** — **"Payslip PAY-202611-E77A88 marked as paid."**
+   The row's status turns **Paid** and its **Mark paid** and **Pay** buttons
+   disappear.
+
+   <Screenshot name="tutorial-payroll-runs-paid" alt="The payroll runs with the teacher's payslip paid" path="/app/payroll" />
+
+</Steps>
+
+### 4. Download the payslip
+
+<Steps>
+
+1. Click **Payslip** on the paid row. The PDF (`PAY-202611-E77A88.pdf`) opens
+   in a new tab.
+
+   <Screenshot name="tutorial-payslip-pdf" alt="Omar Farouk's November payslip: base 3200, housing 400, income tax 350, net 3250, paid by bank transfer" path="/api/v1/salary-records/…/payslip.pdf" />
+
+2. Omar sees the same payslip on his own **My payslips** page, marked
+   **Paid** with the date — you will look at it in the next chapter.
+
+</Steps>
+
+The payslip shows the school, the payslip number and month, the employee with
+their ID and qualification, the status and paid date, **Earnings** (base
+salary and each earning, **Gross earnings**), **Deductions** (each deduction,
+**Total deductions**), **Net pay**, and how it was paid — "Payment method: Bank transfer" followed by
+the reference.
+
+:::note[Paying by card instead]
+**Pay** on a pending payslip opens a Stripe Checkout session so the school pays
+that payslip by card. Stripe returns to <Route path="/app/payroll" /> with
+`?checkout=success`, and the webhook marks the payslip paid (`salary.pay` in
+the audit log, actor role `stripe`). This tutorial uses **Mark paid** instead.
+:::
+
+## Check your work
+
+- One payslip is **Paid** and two are **Pending** for November 2026.
+- **Export 2026 CSV** downloads the year's payslips.
+- Generating November again for the same people answers "(… already existed)"
+  and creates nothing.
+
+## If something goes wrong
+
+- **Mark paid / Pay are missing** — you lack <Perm name="salary:pay" />, or the
+  payslip is already paid.
+- **Nobody listed under Teachers or Non-teaching staff** — add them first on
+  the People pages.
+- **A wrong structure was used** — payslips record the amounts at generation
+  time; editing the structure later does not change them.
+
+## Under the hood
+
+- <Api method="POST" path="salary-structures" perm="salary_structure:create" /> · <Api method="POST" path="salary-records/generate" /> · <Api method="POST" path="salary-records/:id/pay" perm="salary:pay" />
+- <Api method="GET" path="salary-records/:id/payslip.pdf" /> — the payslip (`payroll.payslip.download` in the audit log).
+- <SourceFile path="apps/web/src/app/(tenant)/app/payroll/page.tsx" /> — both tabs, the generate card and the Mark as paid drawer.
+
+## Learn more
+
+<CardGrid>
+  <LinkCard title="Payroll" description="Structures, runs, payslips and paying by card." href="/features/finance/payroll/" />
+  <LinkCard title="Staff portal" description="What staff see of their pay and attendance." href="/features/portals/staff/" />
+</CardGrid>
+
+## Next
+
+<LinkCard title="10. Tour the portals" description="Sign in as the teacher, a student, the parent and a staff member." href="/tutorial/portals-tour/" />

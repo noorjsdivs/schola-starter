@@ -1,0 +1,315 @@
+---
+title: Demo data
+description: "One command, pnpm seed, fills a database with a complete Schola platform — a Super Admin, a 500-student school with a sign-in for every role, and schools in every status."
+---
+
+import { Aside, Steps, CardGrid, LinkCard, Card, Tabs, TabItem } from '@astrojs/starlight/components';
+import SourceFile from '../../../components/SourceFile.astro';
+import BarChart from '../../../components/BarChart.astro';
+import Pipeline from '../../../components/Pipeline.astro';
+import DemoLogin from '../../../components/DemoLogin.astro';
+import Route from '../../../components/Route.astro';
+
+A new Schola database is empty: no schools, no people, not even a Super
+Admin. The **demo seed** fills it with a realistic platform in about a minute,
+so you can explore every screen, record a walkthrough video, or run the
+end-to-end tests. It is the same data the rest of these docs refer to.
+
+```sh
+pnpm seed
+```
+
+Every demo account uses the password **`Schola@2026`**.
+
+## What you get
+
+<CardGrid>
+  <Card title="A platform" icon="server">
+    A Super Admin and four schools, one in each situation the platform
+    console has to show: active, awaiting approval (two) and suspended.
+  </Card>
+  <Card title="A complete school" icon="laptop">
+    **Greenfield International School**: Grades 1–10, 500 students, 30
+    teachers, about 600 parents, 10 staff — and weeks of attendance, marks,
+    fees and payroll.
+  </Card>
+  <Card title="A sign-in for every role" icon="approve-check">
+    School Admin, Principal, Vice Principal, Accountant, Teacher, Student,
+    Parent and Staff, plus every teacher individually.
+  </Card>
+  <Card title="Dates that stay current" icon="clock">
+    Everything is dated relative to the day you run the seed, so "today" in
+    the app always has attendance in progress and fees falling due.
+  </Card>
+</CardGrid>
+
+## Run it
+
+<Steps>
+
+1. Make sure `MONGODB_URI` and `ENCRYPTION_MASTER_KEY` are set in `test.env` (see [Installation](/setup/installation/)) and MongoDB is running. The seed reads the same env files as the API.
+
+2. Run the seed from the repository root:
+
+   ```sh
+   pnpm seed
+   ```
+
+   The root script runs `pnpm --filter @schola/api run seed:demo`, which runs
+   `tsx src/jobs/seed-demo.ts`.
+
+3. Watch the progress. The seed prints each step, then a count of every record
+   it created and the sign-in table:
+
+   ```text
+   Connecting to mongodb://localhost:27017/schola …
+     Building the demo school…
+     Creating 41 sign-in accounts…
+     Inserting 2 academic years…
+     …
+   Done in …s.
+          41  sign-in accounts
+           4  schools
+           …
+   Sign in at /login with any of these accounts:
+   ```
+
+   A password inside the connection string is masked as `***`.
+
+4. Start the apps with `pnpm dev` and sign in at `http://localhost:3000/login`.
+
+</Steps>
+
+<DemoLogin as="School Admin" email="admin@greenfield.example" go="/app" />
+
+## The sign-in accounts
+
+| Role | Email | Who it is | What to look at |
+|---|---|---|---|
+| Super Admin | `superadmin@schola.example` | Sam Platform | Platform dashboard, schools, approvals, suspension, audit log |
+| School Admin | `admin@greenfield.example` | Amira Hossain, owner of Greenfield | Everything in the school |
+| Principal | `principal@greenfield.example` | Richard Okafor | Academic head: classes, exams, timetable, admissions |
+| Vice Principal | `viceprincipal@greenfield.example` | Helen Marsh | Read-mostly academic access, leave approvals |
+| Accountant | `accountant@greenfield.example` | Ibrahim Ahmed (also the Senior Accountant staff record) | Fees, payments, payroll |
+| Teacher | `teacher@greenfield.example` | Grace Mensah — class teacher of Grade 3, section teacher of Grade 3 · A | My classes, the register, marks, own attendance and payslips |
+| Student | `student@greenfield.example` | A Grade 8 student (Adam Singh with the default seed) | My attendance, grades with the report card PDF, fees |
+| Parent | `parent@greenfield.example` | A parent of two children (Sofia Singh with the default seed) | My children: attendance, grades, remarks, fees |
+| Staff | `staff@greenfield.example` | Ruby Novak, Librarian | Own attendance and payslips |
+| Applicant (pending) | `owner@riverside.example` | Daniel Brooks, owner of Riverside Academy | Cannot sign in until the Super Admin approves Riverside Academy |
+
+All **30 teachers** can also sign in as `firstname.lastname@greenfield.example`
+— for example `farida.begum@greenfield.example` or `omar.haddad@greenfield.example` —
+with the same password. Grace Mensah is the exception: she signs in as
+`teacher@greenfield.example`.
+
+The student and parent are picked from the generated families, so their names
+change if you pass a different `--students` count.
+
+Two more accounts exist but are not printed: `owner@lakeside.example` (owner of
+the second pending application, inactive) and `owner@hilltop.example` (School
+Admin of the suspended Hilltop College).
+
+<Aside type="tip" title="A ready-made approval demo">
+Sign in as the Super Admin, open <Route path="/platform/approvals" />, approve
+Riverside Academy, then sign in as `owner@riverside.example`. Approval
+activates the owner and marks their email verified, so they go straight to
+their new, empty school.
+</Aside>
+
+## What gets created
+
+### The platform
+
+| School | Type | Status | Owner |
+|---|---|---|---|
+| Greenfield International School | school | `active` (approved 150 days ago) | `admin@greenfield.example` |
+| Riverside Academy | school | `pending_approval` (applied 3 days ago, 320 students expected) | `owner@riverside.example` |
+| Lakeside Coaching Centre | coaching | `pending_approval` (applied yesterday, 120 expected) | `owner@lakeside.example` |
+| Hilltop College | college | `suspended` 9 days ago — "Subscription payment overdue by 60 days." | `owner@hilltop.example` |
+
+The Super Admin has two unread "New school application" notifications, and the
+audit log holds the approval of Greenfield and the suspension of Hilltop.
+Riverside and Lakeside have no roles yet: those are created when they are
+approved, as for any real school.
+
+### Greenfield International School
+
+| Area | What is in it |
+|---|---|
+| Academic years | The previous year and the current one (marked current). Years run from 1 June to 31 May. |
+| Subjects | 12 — English, Mathematics, Science, Social Studies, French, Computer Science, Art & Design, Music, Physical Education, Physics, Chemistry, Biology. |
+| Classes and sections | Grade 1 to Grade 10, each with sections A and B: 20 sections of 30 seats, each with a section teacher. Each class has a class teacher and the subjects taught at that level. |
+| Teachers | 30 — 20 section teachers and 10 specialists, with employee ids `TCH-001` to `TCH-030`, qualifications, subjects and a sign-in. |
+| Students | 500 by default, 25 per section, admission numbers like `GIS-2026-0001`, roll numbers per section. Phone, date of birth and address are stored encrypted. |
+| Parents | About 600, linked to their children. Every eighth student has a sibling one section lower who shares the parents. |
+| Staff | 10 non-teaching staff: office manager, senior accountant, librarian, lab assistant, nurse, counsellor, IT support, two drivers, security officer. |
+| Attendance | The last 20 school days for every student, teacher and staff member. **Today is in progress:** 16 sections marked, Grade 9 · A half marked, the last three sections still to take; 24 of 30 teachers marked. |
+| Exams and grades | "Term 1 — Midterm" (finished) with marks and letter grades for every student in the core subjects, and "Term 1 — Final" (starting 15 days after the seed day, ending 9 days later). |
+| Remarks | 90 teacher remarks — academic, behavior, attendance and general — with private, parent and public visibility. |
+| Fees | Three monthly fee structures, due on the 10th: Primary (Grades 1–5) $220, Middle (6–8) $285, Senior (9–10) $350. An invoice for every student for each month of the current year so far (up to three months), with payments and receipts — older months mostly paid, the current month less than half. |
+| Payroll | Three salary structures (Teacher — Senior, Teacher — Standard, Support staff) and a payslip for every teacher and staff member each of those months: earlier months paid, the current month pending. |
+| Timetable | Every section, Monday to Friday, six periods, with subject, teacher (no clashes) and room. |
+| Leave | Pending requests from the demo parent and teacher to decide, plus approved and rejected history. |
+| Admissions | 14 applications across submitted, reviewing, interview, offered, rejected and withdrawn. |
+| Library | 30 books (1–4 copies each) and about 30 loans, some overdue — including the demo student and teacher. |
+| Transport | 4 bus routes with stops and drivers; about 120 primary students ride, including the demo parent's children. |
+| Hostel | Two houses (boys and girls), 20 rooms of 4 beds, about 50 senior boarders — including the demo student. |
+| Notifications | For the School Admin: the approval notice, an exam reminder and a fee-collection reminder. |
+
+### How many records
+
+Counted from the seed code for a run with the default 500 students, in the
+middle of a school year (from September on, when three months of fees and
+payroll already exist).
+
+<BarChart
+  title="Records per collection — the large ones"
+  unit="records"
+  data={[
+    { label: 'attendance', value: 10413, note: '20 days + today' },
+    { label: 'grades', value: 2100 },
+    { label: 'fee invoices', value: 1500 },
+    { label: 'fee payments', value: 1222 },
+    { label: 'staff attendance', value: 824 },
+    { label: 'parents', value: 604 },
+    { label: 'timetable periods', value: 600 },
+    { label: 'students', value: 500 },
+    { label: 'enrollments', value: 500 },
+  ]}
+/>
+
+<BarChart
+  title="Records per collection — the small ones"
+  unit="records"
+  data={[
+    { label: 'salary records', value: 120 },
+    { label: 'bus riders', value: 120 },
+    { label: 'remarks', value: 90 },
+    { label: 'hostel boarders', value: 49 },
+    { label: 'sign-in accounts', value: 41 },
+    { label: 'library loans', value: 31 },
+    { label: 'teachers', value: 30 },
+    { label: 'library books', value: 30 },
+    { label: 'sections', value: 20 },
+    { label: 'hostel rooms', value: 20 },
+    { label: 'admission applications', value: 14 },
+    { label: 'subjects', value: 12 },
+    { label: 'classes', value: 10 },
+    { label: 'staff', value: 10 },
+    { label: 'audit log entries', value: 8 },
+    { label: 'leave requests', value: 7 },
+    { label: 'notifications', value: 5 },
+    { label: 'schools', value: 4 },
+    { label: 'bus routes', value: 4 },
+  ]}
+/>
+
+Plus 2 academic years, 2 exams, 3 fee structures, 3 salary structures, 39 role
+memberships and one more audit entry, `seed.demo`, recording the run itself.
+
+<Aside type="note" title="The numbers depend on the date">
+Because everything is relative to today, early in the school year there is
+less history. Seeded on 3 June, just after the year starts, the same command
+creates about 1,400 attendance records, 500 invoices (one month) and 40 payslips.
+Two runs on the same day produce the same school: names and marks come from a
+fixed random seed.
+</Aside>
+
+## How it works
+
+<Pipeline
+  caption="What one run of pnpm seed does."
+  steps={[
+    { label: 'Check', icon: 'shield', note: 'env, password, NODE_ENV' },
+    { label: 'Roles', icon: 'key', note: 'permissions and platform roles' },
+    { label: 'Existing data?', icon: 'search', note: 'stop, or remove with --reset' },
+    { label: 'Indexes', icon: 'database', note: 'create missing ones' },
+    { label: 'Build', icon: 'layers', note: 'whole dataset in memory' },
+    { label: 'Insert', icon: 'cloud-upload', note: 'accounts, schools, records' },
+    { label: 'Audit', icon: 'scroll', note: 'one seed.demo entry' },
+  ]}
+/>
+
+1. **Checks.** Refuses to run in production (see below), requires `ENCRYPTION_MASTER_KEY`, and checks the password against the normal password policy.
+2. **Permissions and platform roles** are written, as the API does at start.
+3. **Existing demo data** is looked up: any account on a reserved demo domain (`schola.example`, `greenfield.example`, `riverside.example`, `lakeside.example`, `hilltop.example`, and `sunrise.example` — the [tutorial](/tutorial/overview/)'s Sunrise Academy), soft-deleted ones included, and any school owned by one. If some exists, the seed stops — or removes it first with `--reset`.
+4. **Indexes.** Every unique index is created before the bulk insert, so a fresh database enforces the same rules as a running one.
+5. **Build.** The whole dataset is built in memory by a pure function, with every id assigned up front.
+6. **Insert.** Accounts (all sharing one argon2id hash of the password), schools, the tenant roles of the approved schools, memberships, then every collection in dependency order, in chunks of 2,000.
+7. **Identity mirror.** If `DATABASE_URL` is set, the accounts are also copied to Neon Postgres, as sign-up does.
+8. **Audit.** One `seed.demo` entry with the counts.
+
+The seed works across schools, so it writes with the models directly instead of
+`withTenant`; every school document gets its `schoolId` from the builder.
+
+## Options
+
+```sh
+pnpm seed -- --reset                     # remove the demo data, then seed a fresh copy
+pnpm seed -- --password 'Another-Pass1'  # one password for every demo account
+pnpm seed -- --students 300              # 20 to 600 students
+pnpm seed -- --help                      # print the options
+```
+
+| Flag | Default | What it does |
+|---|---|---|
+| `--reset` | off | Removes the existing demo data first, then seeds again. |
+| `--password <pw>` | `Schola@2026` | Password for every demo account. Must meet the password policy: 8–128 characters, with an uppercase letter, a lowercase letter and a digit. When you pass one, the sign-in table prints "(the --password you passed)" instead of the password. |
+| `--students <n>` | `500` | Students in Greenfield, a whole number from 20 to 600 (20 sections × 30 seats). They are spread evenly across the sections. |
+| `--allow-production` | off | Allows running with `NODE_ENV=production`. Must be combined with `--password`. |
+| `--help`, `-h` | — | Prints the help text and exits. |
+
+Any other flag stops the seed with `Unknown option` and the help text.
+
+## Safety rules
+
+- **It never duplicates.** Running `pnpm seed` twice stops with "Demo data is already in this database. Re-run with --reset to remove it and seed a fresh copy."
+- **`--reset` removes only demo data:** the schools owned by demo-domain accounts — with every record stored under them, their roles, memberships and notifications — and the demo accounts with their sessions and email tokens. That includes schools built by hand on a reserved domain, such as the tutorial's Sunrise Academy, and schools whose owner is soft-deleted (a rejected application). An account on any other domain that belonged to a removed school keeps its sign-in and only loses that membership. Other schools and users are not touched. These records are deleted for real, not soft-deleted.
+- **The audit log is kept.** Audit entries are append-only; `--reset` leaves them in place.
+- **No real inbox is ever addressed.** Every demo email uses a reserved `.example` domain. Use `sunrise.example` for anything you build by hand that `--reset` should clean up.
+- **Production is refused** unless you pass both `--allow-production` and your own strong `--password`. Never leave a known demo password on a public deployment.
+
+<Aside type="danger" title="Check MONGODB_URI before you seed">
+The seed writes to whatever database `MONGODB_URI` points at. Make sure
+`test.env` names your local or development database, not a shared one.
+</Aside>
+
+## Troubleshooting
+
+| Message | Cause | Fix |
+|---|---|---|
+| `ENCRYPTION_MASTER_KEY is not set` | No encryption key | Generate one with `openssl rand -base64 32`, put it in `test.env`. Use the same key the API runs with, or the encrypted fields will not decrypt. See [Encryption](/setup/services/encryption/). |
+| `ENCRYPTION_MASTER_KEY must decode to 32 bytes` | The key is not 32 bytes of base64 | Generate it again with the command above. |
+| `Demo data is already in this database` | You seeded before | `pnpm seed -- --reset`. |
+| `Refusing to seed demo accounts with NODE_ENV=production` | `NODE_ENV` is `production` | Seed a development database, or pass `--allow-production --password '<strong password>'`. |
+| `--password: Password must contain …` | The password fails the policy | Use 8+ characters with upper case, lower case and a digit. |
+| `--students must be a whole number from 20 to 600` | Out of range | Pick a number from 20 to 600. |
+| `querySrv ENOTFOUND …mongodb.net` or a timeout after 10 seconds | Wrong Atlas URI, or your IP is not allowed | Check `MONGODB_URI` and Atlas → Network Access. See [MongoDB](/setup/services/mongodb/). |
+| `Index check skipped for …` | An existing index differs from the model | Only a warning: the data is still valid. Drop the old index if you want an exact match. |
+
+## Demo data versus "Load sample"
+
+The "Load sample" button in the school app's top bar is a different thing. It
+swaps the page's data for a demo school generated **in the browser** and never
+touches the database. It covers school setup, people, attendance, exams,
+gradebook, remarks, reports and the dashboard; finance, facilities, leave,
+admissions and personal pages always show real data. Use it for a quick look
+without seeding; use `pnpm seed` for anything that needs real accounts, such
+as signing in as a parent.
+
+## Under the hood
+
+- <SourceFile path="apps/api/src/jobs/seed-demo.ts" /> — the command line: flags, safety checks, the printed report.
+- <SourceFile path="apps/api/src/seed/run-demo-seed.ts" symbol="runDemoSeed" /> — finds or removes old demo data, creates indexes, inserts everything.
+- <SourceFile path="apps/api/src/seed/demo-school.ts" symbol="buildDemoDataset" /> — the platform, the school, people, attendance, grades, fees and payroll.
+- <SourceFile path="apps/api/src/seed/demo-operations.ts" /> — timetable, leave, admissions, library, transport and hostel.
+- <SourceFile path="apps/api/src/seed/demo-school.test.ts" /> and <SourceFile path="apps/api/src/seed/__tests__/demo-seed.integration.test.ts" /> — check the dataset offline and against an in-memory database.
+
+## Related pages
+
+<CardGrid>
+  <LinkCard title="Demo accounts" description="Every demo sign-in in one table." href="/reference/demo-accounts/" />
+  <LinkCard title="Tutorial" description="Build your own school from scratch instead." href="/tutorial/overview/" />
+  <LinkCard title="Testing" description="The end-to-end tests run against this data." href="/operations/testing/" />
+  <LinkCard title="Roles at a glance" description="What each demo account can do." href="/start-here/roles-at-a-glance/" />
+</CardGrid>

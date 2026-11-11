@@ -1,0 +1,316 @@
+---
+title: Roles at a glance
+description: The nine Schola roles plus the visitor state — what each one can do, where each lands after signing in, and which demo account to use.
+---
+
+import { Aside, Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+import Roles from '../../../components/Roles.astro';
+import Route from '../../../components/Route.astro';
+import Perm from '../../../components/Perm.astro';
+import Api from '../../../components/Api.astro';
+import SourceFile from '../../../components/SourceFile.astro';
+import DemoLogin from '../../../components/DemoLogin.astro';
+import BarChart from '../../../components/BarChart.astro';
+
+A [role](/start-here/glossary/#role) is a job title with a fixed set of
+[permissions](/start-here/glossary/#permission) attached. Schola has **nine
+roles**: one for the platform and eight inside a school. There is also one
+*state* that is not a role in the product sense: a **visitor**, someone who
+has signed up but does not belong to any school yet.
+
+<Roles list={['super_admin', 'school_admin', 'principal', 'vice_principal', 'teacher', 'accountant', 'student', 'parent', 'staff']} />
+
+The server never checks a role's *name*. Every API route asks for a
+permission key, and a role is simply the bundle of keys it grants. So "what can
+a Teacher do?" really means "which keys does the `teacher` bundle contain?" —
+and that is what this page lists.
+
+## All roles in one table
+
+| Role | Key | Scope | Lands on after sign-in | Demo account |
+|---|---|---|---|---|
+| Super Admin | `super_admin` | Platform | <Route path="/platform" /> | `superadmin@schola.example` |
+| School Admin | `school_admin` | One school | <Route path="/app" /> (school dashboard) | `admin@greenfield.example` |
+| Principal | `principal` | One school | <Route path="/app" /> (school dashboard) | `principal@greenfield.example` |
+| Vice Principal | `vice_principal` | One school | <Route path="/app" /> (school dashboard) | `viceprincipal@greenfield.example` |
+| Teacher | `teacher` | One school | <Route path="/app" /> (personal dashboard) | `teacher@greenfield.example` |
+| Accountant | `accountant` | One school | <Route path="/app" /> (school dashboard) | `accountant@greenfield.example` |
+| Student | `student` | One school | <Route path="/app" /> (personal dashboard) | `student@greenfield.example` |
+| Parent | `parent` | One school | <Route path="/app" /> (personal dashboard) | `parent@greenfield.example` |
+| Staff | `staff` | One school | <Route path="/app" /> (personal dashboard) | `staff@greenfield.example` |
+| Visitor (no school yet) | `user` in code | Platform | <Route path="/welcome" /> | none in the seed — sign up a new account |
+
+Every demo account uses the password `Schola@2026` after `pnpm seed` (see
+[Demo data](/setup/demo-data/) and [Demo accounts](/reference/demo-accounts/)).
+
+"School dashboard" means the whole-school view with counts, today's
+attendance and finance figures; it appears for any role holding
+<Perm name="school:read:tenant" />. Everyone else gets a **personal
+dashboard** about themselves — their classes, their child, their payslips.
+
+## How big is each role?
+
+There are 95 permission keys in total: 13 are platform-only, the rest belong to
+school roles.
+
+<BarChart
+  title="Permission keys granted to each role"
+  unit="keys"
+  data={[
+    { label: 'school_admin', value: 77 },
+    { label: 'principal', value: 43 },
+    { label: 'accountant', value: 27 },
+    { label: 'vice_principal', value: 23 },
+    { label: 'teacher', value: 18 },
+    { label: 'super_admin', value: 14, note: 'platform only' },
+    { label: 'student', value: 7 },
+    { label: 'parent', value: 6 },
+    { label: 'staff', value: 5 },
+    { label: 'user (visitor)', value: 1 },
+  ]}
+/>
+
+## The roles one by one
+
+### Super Admin
+
+<Roles list={['super_admin']} note="platform scope — no school attached" />
+
+The owner of the whole Schola platform. The Super Admin reviews school
+applications and approves or rejects them, creates schools directly, suspends
+and reactivates them, forces an admin transfer when a school's owner is
+unavailable, manages platform users (invite, suspend, grant any role in any
+school) and edits platform settings (branding, locale, email templates,
+feature flags). They read the audit log of every school.
+
+- **Lands on:** <Route path="/platform" />, the platform console.
+- **Key permissions:** <Perm name="school:approve" /> <Perm name="school:reject" /> <Perm name="school:suspend" /> <Perm name="school:create_direct" /> <Perm name="admin_transfer:force" /> <Perm name="user:assign_role" /> <Perm name="system_setting:write" /> <Perm name="audit_log:read:all" />
+- **Does not have:** any school permission. The Super Admin works on schools, not inside them.
+
+<DemoLogin as="Super Admin" email="superadmin@schola.example" go="/platform" />
+
+### School Admin
+
+<Roles list={['school_admin']} note="owner of one school" />
+
+The owner of one school. Can do everything inside it: edit the school
+profile, set up academic years, subjects, classes and sections, add and remove
+students, parents, teachers and staff, mark attendance, enter grades, run
+exams, manage fees and payroll, run the library, transport and hostel, send
+announcements, read the school's audit log and export reports. Grants the
+Principal, Vice Principal and Accountant roles on "Members & roles", and can
+hand the school to another member through an
+[admin transfer](/start-here/glossary/#admin-transfer).
+
+- **Lands on:** <Route path="/app" />, the school dashboard. The sidebar shows every module.
+- **Key permissions:** <Perm name="school:update:tenant" /> <Perm name="user:assign_role:tenant" /> <Perm name="student:delete" /> <Perm name="fee:waive" /> <Perm name="salary:pay" /> <Perm name="audit_log:read:tenant" />
+- **Does not have:** the "own" read keys (`fee:read:own`, `salary:read:own` and so on). Those are for people reading about themselves.
+
+<DemoLogin as="School Admin" email="admin@greenfield.example" go="/app" />
+
+### Principal
+
+<Roles list={['principal']} note="academic head" />
+
+Runs the academic side. Can create and edit classes, sections and subjects,
+assign class teachers, admit and edit students, edit teachers, create and
+delete exams, write remarks, manage the timetable, approve leave, run
+admissions and the library, send announcements, read the audit log and export
+the attendance CSV. Reads every student's attendance and grades.
+
+- **Lands on:** <Route path="/app" />, the school dashboard.
+- **Cannot:** touch money (no fees, no payroll), create academic years, delete students, add teachers, parents or staff, mark attendance or enter grades, change the school profile, or grant roles.
+
+<DemoLogin as="Principal" email="principal@greenfield.example" go="/app" />
+
+### Vice Principal
+
+<Roles list={['vice_principal']} note="read-mostly academic access" />
+
+A lighter Principal. Reads almost everything academic — classes, students,
+teachers, parents, attendance, grades, exams, the timetable, admissions,
+library, transport and hostel — and can write remarks and approve leave.
+
+- **Lands on:** <Route path="/app" />, the school dashboard.
+- **Cannot:** create or edit anything structural, read staff records, send announcements or read the audit log.
+
+<DemoLogin as="Vice Principal" email="viceprincipal@greenfield.example" go="/app" />
+
+### Teacher
+
+<Roles list={['teacher']} note="own classes only" />
+
+Works with the classes and sections they teach. Takes the daily register,
+enters marks, writes remarks, reads academic years, exams and the timetable,
+and requests leave. Reads their own staff attendance and payslips. The `:own_classes`
+permissions mean a teacher sees attendance, grades and remarks only for the
+sections they teach.
+
+- **Lands on:** <Route path="/app" />, a personal dashboard. The sidebar starts with "My classes", "My attendance" and "My payslips".
+- **Key permissions:** <Perm name="attendance:mark" /> <Perm name="grade:enter" /> <Perm name="remark:create" /> <Perm name="attendance:read:own_classes" /> <Perm name="salary:read:own" />
+
+<DemoLogin as="Teacher" email="teacher@greenfield.example" go="/app/my/classes">
+  Grace Mensah, class teacher of Grade 3 and section teacher of Grade 3 · A.
+  The other 29 teachers sign in as `firstname.lastname@greenfield.example`.
+</DemoLogin>
+
+### Accountant
+
+<Roles list={['accountant']} note="fees and payroll" />
+
+Owns the money. Creates fee structures, collects payments, waives fees,
+creates salary structures and pays salaries, and exports the fees and payroll
+reports. Reads academic years, classes, sections and subjects (the Fees screen
+needs them to bill a section) and students, teachers, parents and staff so they
+can find who to bill or pay.
+
+- **Lands on:** <Route path="/app" />, the school dashboard (with the finance figures).
+- **Cannot:** edit anything academic — the school setup pages are read only for them, and there is no attendance, grades or exams access.
+
+<DemoLogin as="Accountant" email="accountant@greenfield.example" go="/app/fees" />
+
+### Student
+
+<Roles list={['student']} note="own record only" />
+
+Reads their own attendance, grades (with the report card PDF), fees and
+timetable, browses the library, and requests leave. Can pay their own invoices
+online when Stripe is configured.
+
+- **Lands on:** <Route path="/app" />, a personal dashboard with "My attendance", "My grades" and "My fees".
+- **Key permissions:** <Perm name="attendance:read:own_classes" /> <Perm name="grade:read:own_classes" /> <Perm name="fee:read:own" />
+
+<DemoLogin as="Student" email="student@greenfield.example" go="/app/my/grades">
+  A Grade 8 student (Adam Singh with the default 500-student seed).
+</DemoLogin>
+
+### Parent
+
+<Roles list={['parent']} note="linked children only" />
+
+Reads the attendance, grades, remarks, fees and timetable of the children
+linked to them, requests leave for a child, and can pay a child's invoices
+online when Stripe is configured. Cannot open any other child.
+
+- **Lands on:** <Route path="/app" />, a personal dashboard; the sidebar shows "My children".
+- **Key permissions:** <Perm name="grade:read:own_classes" /> <Perm name="fee:read:own" /> <Perm name="leave:request" />
+
+<DemoLogin as="Parent" email="parent@greenfield.example" go="/app/children">
+  A parent with two children at the school.
+</DemoLogin>
+
+### Staff
+
+<Roles list={['staff']} note="non-teaching staff" />
+
+Non-teaching staff — office, library, transport and so on. Reads their own
+attendance and payslips, browses the library and requests leave.
+
+- **Lands on:** <Route path="/app" />, a personal dashboard with "My attendance" and "My payslips".
+- **Key permissions:** <Perm name="staff_attendance:read:own" /> <Perm name="salary:read:own" /> <Perm name="leave:request" />
+
+<DemoLogin as="Staff" email="staff@greenfield.example" go="/app/my/payslips">
+  Ruby Novak, the school librarian.
+</DemoLogin>
+
+### Visitor (a signed-in account with no school)
+
+<Roles list={['user']} note="not a spec role — a starting state" />
+
+Anyone can create a personal account on <Route path="/signup" /> ("Personal
+account" tab) or by signing in with Google or Facebook. Until a school gives
+them a role, they are a **visitor**. In the code, this account holds the
+platform-level `user` role, whose only permission is
+<Perm name="notification:read:own" />.
+
+- **Lands on:** <Route path="/welcome" />. From there they verify their email and can "Register a school" on <Route path="/onboarding/school" />, which sends an application for the Super Admin to review.
+- **Becomes a member** when a role in a school is added to their account — for example when their school application is approved (they become its School Admin), or when a Super Admin grants them a school role on <Route path="/platform/users" />.
+
+The spec lists nine roles (§7.1) and treats "visitor" as a label. The code
+models it as a tenth role key, `user`, so that a brand-new account still
+resolves to *some* permissions and can sign in. If an account somehow has no
+role at all, signing in quietly gives it the `user` role again.
+
+## Who can do what — the short matrix
+
+A selection of the permissions that most often answer "can this person…?".
+The full list is in [Permissions](/reference/permissions/).
+Each CSV export also needs the read key for its data, so <Perm name="report:export" />
+alone does not open fees or payroll.
+
+| Permission | School Admin | Principal | Vice Principal | Teacher | Accountant | Student | Parent | Staff |
+|---|---|---|---|---|---|---|---|---|
+| <Perm name="school:update:tenant" /> | Yes | — | — | — | — | — | — | — |
+| <Perm name="user:assign_role:tenant" /> | Yes | — | — | — | — | — | — | — |
+| <Perm name="audit_log:read:tenant" /> | Yes | Yes | — | — | — | — | — | — |
+| <Perm name="report:export" /> | Yes | Yes | — | — | Yes | — | — | — |
+| <Perm name="notification:send:tenant" /> | Yes | Yes | — | — | — | — | — | — |
+| <Perm name="academic_year:create" /> | Yes | — | — | — | — | — | — | — |
+| <Perm name="class:create" /> | Yes | Yes | — | — | — | — | — | — |
+| <Perm name="student:create" /> | Yes | Yes | — | — | — | — | — | — |
+| <Perm name="teacher:create" /> | Yes | — | — | — | — | — | — | — |
+| <Perm name="attendance:mark" /> | Yes | — | — | Yes | — | — | — | — |
+| <Perm name="attendance:read:all" /> | Yes | Yes | Yes | — | — | — | — | — |
+| <Perm name="grade:enter" /> | Yes | — | — | Yes | — | — | — | — |
+| <Perm name="remark:create" /> | Yes | Yes | Yes | Yes | — | — | — | — |
+| <Perm name="exam:create" /> | Yes | Yes | — | — | — | — | — | — |
+| <Perm name="fee:collect" /> | Yes | — | — | — | Yes | — | — | — |
+| <Perm name="fee:read:own" /> | — | — | — | — | — | Yes | Yes | — |
+| <Perm name="salary:pay" /> | Yes | — | — | — | Yes | — | — | — |
+| <Perm name="salary:read:own" /> | — | — | — | Yes | — | — | — | Yes |
+| <Perm name="timetable:manage" /> | Yes | Yes | — | — | — | — | — | — |
+| <Perm name="leave:approve" /> | Yes | Yes | Yes | — | — | — | — | — |
+| <Perm name="admission:manage" /> | Yes | Yes | — | — | — | — | — | — |
+| <Perm name="library:manage" /> | Yes | Yes | — | — | — | — | — | — |
+| <Perm name="transport:manage" /> | Yes | — | — | — | — | — | — | — |
+| <Perm name="hostel:manage" /> | Yes | — | — | — | — | — | — | — |
+
+## How a person gets a role
+
+| Role | How it is given |
+|---|---|
+| Super Admin | A Super Admin grants it on <Route path="/platform/users" />, or an operator runs the `grant-role` script (see [Running locally](/setup/running-locally/)). |
+| School Admin | Given to the school's owner when the Super Admin approves the school, or when the Super Admin creates the school directly. Moves to someone else only through an admin transfer. |
+| Principal, Vice Principal, Accountant | The School Admin grants or revokes them on <Route path="/app/members" /> ("Members & roles") — <Api method="POST" path="members/:id/roles" perm="user:assign_role:tenant" />. Only these three can be granted there. |
+| Teacher | Created with the teacher record on <Route path="/app/teachers" />. Schola creates the sign-in and emails a "Set your Schola password" link. |
+| Parent, Staff | Created with the parent or staff record when an email address is entered; the new sign-in is emailed the same "Set your Schola password" link. |
+| Student | Not created from the student form — see the caution below. |
+| Any role | A Super Admin can grant any role in any school on <Route path="/platform/users" />. |
+
+:::caution[Gaps found in the code]
+- **Students:** the student form (`createStudentSchema` in `packages/validation/src/people.ts`) has no email field, so there is no screen that gives a student a sign-in linked to their record. The demo student's link comes from the seed.
+- **Existing accounts as parents:** if the email already belongs to an account, the parent record is linked to it but the `parent` role is not added, so that person still lands on `/welcome`.
+:::
+
+## One person, several roles
+
+A person can hold more than one role in the same school — for example a
+teacher who is also the accountant. Then:
+
+- **Permissions add up.** The person gets every key from every role they hold in that school.
+- **One role is primary.** The highest role decides which dashboard and console they get, in this order: Super Admin, School Admin, Principal, Vice Principal, Accountant, Teacher, Staff, Parent, Student, then the visitor `user` role.
+- **The school is chosen at sign-in.** If an account belongs to more than one school, sign-in picks the first of those schools that is `active`. There is no school switcher yet. If none is active (suspended, pending or rejected), sign-in is refused.
+
+The demo Accountant shows the "links" idea too: their account is tied to a
+staff record (Ibrahim Ahmed, Senior Accountant), so "My attendance" appears in
+their sidebar even though their role is Accountant. The "My …" pages appear
+for whoever is linked to a student, parent, teacher or staff record, not by
+role alone.
+
+## Under the hood
+
+- <SourceFile path="packages/types/src/roles.ts" symbol="ROLES" /> — the ten role keys, split into `PLATFORM_ROLES` (`super_admin`, `user`) and `TENANT_ROLES`.
+- <SourceFile path="packages/types/src/permissions.ts" symbol="PERMISSIONS" /> — all 95 permission keys.
+- <SourceFile path="apps/api/src/services/rbac/permissions.ts" symbol="ROLE_PERMISSIONS" /> — the default bundle for each role.
+- <SourceFile path="apps/api/src/services/rbac/seed.ts" /> — writes roles and bundles to the database on every API start; tenant roles are created per school at approval.
+- <SourceFile path="apps/api/src/services/rbac/resolver.ts" symbol="resolveUserPermissions" /> — turns a user and a school into a primary role and a permission set.
+- <SourceFile path="apps/web/src/components/layout/dashboard-shell.tsx" /> — the sidebar: which link needs which permission or link.
+
+## Related pages
+
+<CardGrid>
+  <LinkCard title="RBAC in depth" description="How permissions are stored, resolved and checked on every request." href="/architecture/rbac/" />
+  <LinkCard title="Roles reference" description="Every role with its complete permission list." href="/reference/roles/" />
+  <LinkCard title="Members and roles" description="The School Admin's screen for granting staff roles." href="/features/school/members-and-roles/" />
+  <LinkCard title="Onboarding and welcome" description="What a visitor sees and how they register a school." href="/features/accounts/onboarding-and-welcome/" />
+</CardGrid>

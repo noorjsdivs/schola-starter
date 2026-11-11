@@ -1,0 +1,322 @@
+---
+title: Scripts and tooling
+description: Every script in the root and in each workspace, the Turborepo pipeline, ESLint, Prettier, husky and lint-staged, the strict TypeScript settings, and the Vitest and Playwright setup.
+---
+
+import { Aside, CardGrid, LinkCard, Card, Tabs, TabItem, Steps } from '@astrojs/starlight/components';
+import SourceFile from '../../../components/SourceFile.astro';
+import Pipeline from '../../../components/Pipeline.astro';
+
+Schola's tooling does three jobs: **run** the apps (pnpm and Turborepo),
+**check** the code (TypeScript, ESLint, Prettier, the pre-commit hook) and
+**test** it (Vitest, Supertest, Playwright). This page lists every script and
+explains each tool's configuration, so you know what a command really does
+before you run it.
+
+## The everyday commands
+
+Run these from the repository root.
+
+```sh
+pnpm dev          # web :3000, API :8000, docs :3002 — side by side
+pnpm seed         # load the demo platform
+pnpm typecheck    # TypeScript in every workspace
+pnpm lint         # ESLint in every workspace
+pnpm test         # unit + integration tests
+pnpm test:e2e     # Playwright end-to-end tests
+pnpm format       # Prettier, write
+pnpm build        # production build of every app
+```
+
+The project's quality gate, run before every merge, is:
+
+```sh
+pnpm typecheck && pnpm lint && pnpm test
+```
+
+## Root scripts
+
+From <SourceFile path="package.json" />:
+
+| Script | Runs | What it does |
+|---|---|---|
+| `dev` | `turbo run dev` | Starts every workspace's dev server. See [Running locally](/setup/running-locally/). |
+| `build` | `turbo run build` | Production build of the web app (`next build`), the API (`tsc`) and the docs (`astro build`). |
+| `typecheck` | `turbo run typecheck` | `tsc --noEmit` in every package and app; `astro check` for the docs. |
+| `lint` | `turbo run lint` | `eslint .` in every package and app. |
+| `test` | `turbo run test` | Vitest in the API, the web app, `@schola/db` and `@schola/validation`. |
+| `test:e2e` | `turbo run test:e2e` | Playwright in the web app. Needs the API, the web app and seeded data running. |
+| `seed` | `pnpm --filter @schola/api run seed:demo` | The demo seed. Pass options after `--`: `pnpm seed -- --reset`. See [Demo data](/setup/demo-data/). |
+| `format` | `prettier --write "**/*.{ts,tsx,js,jsx,json,md,css}"` | Formats the whole repo. |
+| `format:check` | `prettier --check …` | Same files, reports instead of writing. |
+| `clean` | `turbo run clean && rm -rf node_modules` | Removes the root `node_modules`. No workspace defines a `clean` script, so the Turborepo half does nothing. |
+| `prepare` | `husky` | Runs automatically after `pnpm install` and installs the Git hooks. |
+
+## Workspace scripts
+
+Run any of these with `pnpm --filter <package> <script>`, for example
+`pnpm --filter @schola/api test`.
+
+<Tabs>
+  <TabItem label="@schola/api">
+    From <SourceFile path="apps/api/package.json" />:
+
+    | Script | Runs | What it does |
+    |---|---|---|
+    | `dev` | `stripe listen … & tsx watch src/index.ts` | The API with live reload, plus the Stripe webhook listener in the background. |
+    | `stripe:listen` | `stripe listen --forward-to http://127.0.0.1:8000/api/v1/stripe/webhook …` | Only the listener, for when the API is already running. |
+    | `build` | `tsc -p tsconfig.json` | Compiles `src/` to `dist/`. |
+    | `start` | `node dist/index.js` | Runs the compiled API. CI's end-to-end job starts the API with `tsx src/index.ts` instead. |
+    | `lint` | `eslint .` | |
+    | `typecheck` | `tsc --noEmit` | |
+    | `test` | `vitest run` | Unit and integration tests, once. |
+    | `test:watch` | `vitest` | The same, re-running on save. |
+    | `seed:demo` | `tsx src/jobs/seed-demo.ts` | The demo seed (the root `pnpm seed` calls this). |
+    | `grant-role` | `tsx src/jobs/grant-role.ts` | Give an existing account a role. See [Running locally](/setup/running-locally/#granting-roles-from-the-command-line). |
+    | `sync-role-keys` | `tsx src/jobs/sync-role-keys.ts` | Rebuild the role list cached on every user document. |
+  </TabItem>
+  <TabItem label="@schola/web">
+    From <SourceFile path="apps/web/package.json" />:
+
+    | Script | Runs | What it does |
+    |---|---|---|
+    | `dev` | `next dev --webpack` | Dev server on port 3000. |
+    | `build` | `next build --webpack` | Production build into `.next/`. |
+    | `start` | `next start` | Serves the production build. |
+    | `lint` | `eslint .` | |
+    | `typecheck` | `tsc --noEmit` | |
+    | `test` | `vitest run --passWithNoTests` | Unit tests under `src/`. |
+    | `test:e2e` | `playwright test` | The specs in `e2e/`. |
+  </TabItem>
+  <TabItem label="@schola/docs">
+    From <SourceFile path="apps/docs/package.json" />:
+
+    | Script | Runs | What it does |
+    |---|---|---|
+    | `dev` / `start` | `astro dev --port 3002` | This site with live reload. |
+    | `build` | `astro build` | Static site into `apps/docs/dist/`. Fails on broken MDX. |
+    | `preview` | `astro preview --port 3002` | Serves the built site. |
+    | `check` / `typecheck` | `astro check` | Type-checks `.astro` and content files. |
+    | `lint` | `eslint .` | Lints the TypeScript and React islands (not `.astro` or `.mdx`). |
+    | `astro` | `astro` | The Astro CLI, for anything else. |
+  </TabItem>
+  <TabItem label="packages/*">
+    | Package | Scripts |
+    |---|---|
+    | `@schola/db` | `lint`, `typecheck`, `test` (`vitest run`), `db:migrate` (`tsx src/postgres/migrate.ts` — creates the Neon identity tables) |
+    | `@schola/validation` | `lint`, `typecheck`, `test` (`vitest run --passWithNoTests`) |
+    | `@schola/config`, `@schola/types`, `@schola/ui` | `lint`, `typecheck` |
+    | `@schola/eslint-config`, `@schola/tsconfig` | none — configuration only |
+
+    `db:migrate` reads `DATABASE_URL` from the shell, not from `test.env`:
+    `DATABASE_URL=… pnpm --filter @schola/db db:migrate`.
+  </TabItem>
+</Tabs>
+
+## Turborepo
+
+Turborepo runs a script in every workspace that has it, in the right order,
+and caches the results. The pipeline is <SourceFile path="turbo.json" />:
+
+| Task | Depends on | Cached | Notes |
+|---|---|---|---|
+| `build` | `^build` | Yes — outputs `.next/**` (minus `.next/cache`) and `dist/**` | `^build` means "build my dependencies first". The shared packages have no `build`, so in practice the three apps build independently. |
+| `dev` | — | No | Persistent: runs until you stop it. |
+| `lint` | `^build` | Yes | |
+| `typecheck` | `^build` | Yes | |
+| `test` | `^build` | Yes | |
+| `test:e2e` | `^build` | No | Depends on a running stack, so never cached. |
+| `clean` | — | No | |
+
+Two more settings decide when a cached result is thrown away:
+
+- **`globalDependencies`** — a change to `.env`, `tsconfig.base.json`, `packages/tsconfig/base.json` or any `apps/*/.env.production` invalidates every task. (`.env.example` is also listed; the file no longer exists.)
+- **`globalEnv`** — the listed environment variables (`NODE_ENV`, `MONGODB_URI`, the `NEXT_PUBLIC_*` keys…) are part of every task's cache key and are passed through to the tasks.
+
+Run a task for one workspace through Turborepo with `--filter`:
+
+```sh
+pnpm turbo run build --filter=@schola/web
+```
+
+## TypeScript
+
+Every workspace extends a preset from `packages/tsconfig/`:
+
+| Preset | Used by | Adds |
+|---|---|---|
+| `base.json` | everything | The strict settings below. Target ES2023, `moduleResolution: Bundler`, `isolatedModules`. |
+| `node.json` | the API | `module` and `moduleResolution` `NodeNext`, Node types. |
+| `next.json` | the web app | DOM libraries, `jsx: preserve`, the Next.js plugin. |
+| `library.json` | available for libraries | `composite`, emits declarations to `dist/`. |
+
+The strict part of <SourceFile path="packages/tsconfig/base.json" />:
+
+```json
+{
+  "strict": true,
+  "noUncheckedIndexedAccess": true,
+  "noImplicitOverride": true,
+  "noImplicitReturns": true,
+  "noFallthroughCasesInSwitch": true
+}
+```
+
+`noUncheckedIndexedAccess` means `list[0]` has type `T | undefined`, so the
+code must handle a missing element. The API also sets `jsx: react-jsx` (for
+the PDF documents written in React) and emits to `dist/`. The web app adds the
+path alias `@/*` → `src/*`. The installed compiler is TypeScript `6.0.3`.
+
+The project rules add two more: **no `any`** (also an ESLint
+error), and no `@ts-ignore` without a written reason.
+
+## ESLint
+
+ESLint uses the flat config format (`eslint.config.js`). The installed
+version is ESLint `10.14`; some comments in the configs still say "ESLint 9".
+
+<CardGrid>
+  <Card title="Shared base" icon="list-format">
+    <SourceFile path="packages/eslint-config/base.js" /> — `@eslint/js`
+    recommended, `typescript-eslint` recommended and `eslint-config-prettier`,
+    plus: `no-explicit-any` (error), `eqeqeq` smart (error),
+    `consistent-type-imports` (warn), `no-unused-vars` with `_` prefixes
+    allowed (warn), `no-console` except `warn` and `error` (warn).
+  </Card>
+  <Card title="Node and Next variants" icon="setting">
+    `node.js` adds Node globals (the API). `next.js` adds browser globals and
+    the React, React Hooks and Next.js rules, including `core-web-vitals`
+    (the web app). `eslint-plugin-react` is wrapped with `@eslint/compat` to
+    run on ESLint 10.
+  </Card>
+  <Card title="Per app" icon="laptop">
+    Each app's `eslint.config.js` extends a variant and turns on typed
+    linting with `projectService`. Config files themselves are ignored.
+  </Card>
+  <Card title="Root" icon="document">
+    <SourceFile path="eslint.config.js" /> — a lighter copy of the base
+    rules without type information. The pre-commit hook lints from the root,
+    so this is the config it uses.
+  </Card>
+</CardGrid>
+
+The type-checked rule sets (`recommendedTypeChecked`) are deliberately not
+used: strict `tsc` is the type-safety gate, and those rules are noisy on
+Express handlers whose bodies Zod has already validated.
+
+## Prettier
+
+<SourceFile path=".prettierrc" />:
+
+| Setting | Value |
+|---|---|
+| `semi` | `true` |
+| `singleQuote` | `false` (double quotes) |
+| `trailingComma` | `all` |
+| `printWidth` | `100` |
+| `tabWidth` / `useTabs` | `2` / `false` |
+| `arrowParens` | `always` |
+| `endOfLine` | `lf` |
+| `plugins` | `prettier-plugin-tailwindcss` (sorts Tailwind classes) |
+
+`.prettierignore` skips `node_modules`, build output, `coverage`,
+`playwright-report`, `pnpm-lock.yaml` and minified files. The `format` script
+covers `ts`, `tsx`, `js`, `jsx`, `json`, `md` and `css` files — not `.mdx` or
+`.astro`.
+
+## The pre-commit hook
+
+<Pipeline
+  caption="What happens when you run git commit."
+  steps={[
+    { label: 'git commit', icon: 'terminal' },
+    { label: 'husky', icon: 'workflow', note: '.husky/pre-commit' },
+    { label: 'lint-staged', icon: 'search', note: 'only staged files' },
+    { label: 'ESLint --fix', icon: 'shield', note: 'ts, tsx, js, jsx' },
+    { label: 'Prettier', icon: 'palette', note: 'code, json, md, css, yaml' },
+    { label: 'Commit', icon: 'badge-check', note: 'if nothing failed' },
+  ]}
+/>
+
+`pnpm install` runs the root `prepare` script, which installs **husky**. Its
+`.husky/pre-commit` hook runs `pnpm exec lint-staged`, configured in the root
+`package.json`:
+
+```json
+"lint-staged": {
+  "*.{ts,tsx,js,jsx}": ["eslint --fix", "prettier --write"],
+  "*.{json,md,css,yaml,yml}": ["prettier --write"]
+}
+```
+
+Only the files you staged are checked. If ESLint finds an error it cannot fix,
+the commit stops and prints it.
+
+## Tests
+
+| Layer | Tool | Where | Run |
+|---|---|---|---|
+| Unit | Vitest | `*.test.ts` next to the source | `pnpm test` |
+| Integration | Vitest + Supertest + `mongodb-memory-server` | `apps/api/src/modules/<area>/__tests__/*.integration.test.ts` | `pnpm --filter @schola/api test` |
+| End-to-end | Playwright | `apps/web/e2e/*.spec.ts` | `pnpm test:e2e` |
+
+### Vitest
+
+<SourceFile path="apps/api/vitest.config.ts" /> runs in a Node environment
+and picks up `src/**/*.test.ts`. Integration tests boot a real Express app
+against an in-memory MongoDB with fresh secrets
+(<SourceFile path="apps/api/src/test/setup.ts" />), so they never touch your
+database. Because each file starts its own database and the rate limiters are
+in-process, files run **one at a time** (`fileParallelism: false`). Hooks may
+take up to 120 seconds — the first run downloads a MongoDB binary — and tests
+up to 30 seconds. Coverage (`v8`) covers `src/modules`, `src/services` and
+`src/utils`.
+
+The web app's <SourceFile path="apps/web/vitest.config.ts" /> only includes
+`src/**/*.test.{ts,tsx}`, so Playwright specs are never picked up by Vitest.
+
+### Playwright
+
+<SourceFile path="apps/web/playwright.config.ts" />:
+
+- Tests live in `apps/web/e2e/` and run against `E2E_BASE_URL` (default `http://localhost:3000`).
+- **One worker, in file order** (`workers: 1`, `fullyParallel: false`): the specs share one seeded school and some of them change it.
+- Timeouts: 45 seconds per test, 10 seconds per assertion. On CI a failed test is retried once.
+- Traces are kept on failure; screenshots only on failure.
+- Two projects: **desktop** (Desktop Chrome, every spec except `responsive.spec.ts`) and **phone** (Pixel 7, only `responsive.spec.ts`).
+
+The specs: `01-auth`, `02-security`, `03-portals`, `04-school-day`,
+`05-operations` and `responsive`. To run them locally:
+
+<Steps>
+
+1. `pnpm --filter @schola/web exec playwright install chromium` (once).
+2. `pnpm seed -- --reset` for a fresh demo school.
+3. `pnpm dev` and wait for both servers.
+4. In another terminal: `pnpm test:e2e`.
+
+</Steps>
+
+Re-seed before a second full run, because the specs change the data. See
+[Testing](/operations/testing/).
+
+## Continuous integration
+
+<SourceFile path="_.github/workflows/ci.yml" /> defines two jobs:
+
+- **checks** — Node 22, `pnpm install --frozen-lockfile`, then `pnpm typecheck`, `pnpm lint` and `pnpm test`, with the MongoDB test binary cached.
+- **e2e** — a `mongo:8` service, throwaway secrets generated with `openssl rand` for the run, every external service blanked, `pnpm seed`, a production build of the web app, the API and the web app started side by side, then Playwright. On failure it uploads the report and both server logs.
+
+<Aside type="caution" title="CI is not running">
+The workflow sits in `_.github/`, not `.github/`, so GitHub Actions ignores
+it. Rename the folder to `.github` to turn CI back on. See [CI](/operations/ci/).
+</Aside>
+
+## Related pages
+
+<CardGrid>
+  <LinkCard title="Project structure" description="Where every app, package and module lives." href="/setup/project-structure/" />
+  <LinkCard title="Testing" description="What every feature must test, and how." href="/operations/testing/" />
+  <LinkCard title="CI" description="The pipeline, job by job." href="/operations/ci/" />
+  <LinkCard title="Editing the docs" description="Writing and building this site." href="/operations/editing-the-docs/" />
+</CardGrid>

@@ -1,0 +1,501 @@
+---
+title: Glossary
+description: Every term Schola uses — from tenant and role to invoice, payslip, envelope and withTenant — in plain language, with the field or file it maps to in the code.
+---
+
+import { LinkCard, CardGrid } from '@astrojs/starlight/components';
+import Perm from '../../../components/Perm.astro';
+import Route from '../../../components/Route.astro';
+import Api from '../../../components/Api.astro';
+import SourceFile from '../../../components/SourceFile.astro';
+
+The words you will meet across Schola and this guide, in alphabetical order.
+Each entry starts with a plain-language meaning, then says what it is called in
+the code. Only terms that exist in the code are listed. Other pages link here
+the first time they use a term — for example `/start-here/glossary/#section`.
+
+:::note[Model names and collection names]
+"In the code" points at the Mongoose model in `packages/db/src/models/`. The
+spec names collections in snake_case (`audit_logs`, `user_roles`), but the
+models do not set a collection name, so MongoDB stores them under Mongoose's
+default lowercase plural: `auditlogs`, `userroles`, `feeinvoices`,
+`staffattendances` and so on. Use those names when you browse the database.
+:::
+
+**Jump to:**
+[A](#academic-year) ·
+[C](#class) ·
+[D](#demo-data) ·
+[E](#encrypted-fields) ·
+[F](#fee-structure) ·
+[G](#grade) ·
+[I](#invoice) ·
+[L](#leave-request) ·
+[M](#member-link) ·
+[N](#notification) ·
+[P](#payment) ·
+[R](#receipt) ·
+[S](#salary-structure) ·
+[T](#tenant) ·
+[V](#visitor) ·
+[W](#waiver)
+
+## A
+
+### Academic year
+
+The school year, such as `2026-2027`, with a start and an end date. One year
+is marked **current**. Classes, enrollments, exams, fee structures and the
+timetable all belong to an academic year, so the school can start a fresh year
+without losing the old one.
+
+*In the code:* the `AcademicYear` model — `name`, `startDate`,
+`endDate`, `isCurrent`. See [Academic years](/features/academics/academic-years/).
+
+### Access token
+
+The short-lived proof that you are signed in. It is a signed JWT stored in the
+`schola_access` cookie, which JavaScript cannot read (httpOnly). It holds your
+user id, your current school id and your primary role, and it expires after
+15 minutes (`JWT_ACCESS_TTL`). The browser then silently swaps a
+[refresh token](#refresh-token) for a new one.
+
+*In the code:* <SourceFile path="apps/api/src/utils/jwt.ts" symbol="signAccessToken" /> — claims `sub`, `sid`, `rol`. See [Authentication](/architecture/authentication/).
+
+### Admin transfer
+
+Handing ownership of a school from the current [School Admin](#school-admin) to
+another member of the same school. The current admin starts it, the new admin
+accepts through an emailed link (valid 24 hours by default,
+`ADMIN_TRANSFER_TTL_HOURS`) on <Route path="/admin-transfer" />, and the
+`school_admin` role moves across. If the admin is unreachable, the
+[Super Admin](#super-admin) can force the transfer
+(<Perm name="admin_transfer:force" />).
+
+See [Admin transfer](/features/school/admin-transfer/).
+
+### Admission application
+
+A request from a family to join the school, tracked through a pipeline:
+`submitted`, `reviewing`, `interview`, `offered`, then `enrolled` — or
+`rejected` / `withdrawn`. Enrolling an applicant creates the student, a parent
+record for the guardian, and an [enrollment](#enrollment).
+
+*In the code:* the `AdmissionApplication` model. See [Admissions](/features/campus/admissions/).
+
+### Admission number
+
+The school's own identifier for a student, such as `GIS-2026-0001` in the
+demo school. It must be unique within one school (two schools can use the
+same number).
+
+*In the code:* `Student.admissionNumber`, unique per `(schoolId, admissionNumber)`.
+
+### Announcement
+
+A message a School Admin or Principal sends to people in the school. It
+arrives as an in-app [notification](#notification).
+
+*In the code:* <Api method="POST" path="notifications/announce" perm="notification:send:tenant" />. See [Announcements](/features/communication/announcements/).
+
+### Audit log
+
+The school's permanent diary of changes: who did what, when, and what the
+record looked like before and after. Every change to business data writes one
+entry. Entries are never edited or deleted — even the demo seed's `--reset`
+leaves them in place.
+
+*In the code:* the `AuditLog` model — `schoolId`, `actorId`,
+`actorRoleAtTime`, `action` (for example `student.create`, `fee.waive`),
+`resource`, `resourceId`, `before`, `after`, `metadata`. See
+[Audit log](/architecture/audit-log/).
+
+## C
+
+### Class
+
+A year group within an academic year, such as "Grade 3". A class has a class
+teacher and a list of subjects taught at that level, and is split into one or
+more [sections](#section).
+
+*In the code:* the `Class` model — `academicYearId`, `name`,
+`classTeacherId`, `subjectIds`. See [Classes and sections](/features/academics/classes-and-sections/).
+
+### CSRF token
+
+A second secret that protects you from other websites making changes in your
+name. The API sets a `schola_csrf` cookie that the page *can* read, and the web
+app copies it into an `x-csrf-token` header on every POST, PUT, PATCH and
+DELETE. The API rejects a change whose header is missing or does not match
+(`403 FORBIDDEN`). Signing in, refreshing the session and the public school
+sign-up are exempt.
+
+*In the code:* <SourceFile path="apps/api/src/utils/cookies.ts" symbol="verifyCsrfToken" />, signed with `CSRF_SECRET`. See [Security](/architecture/security/).
+
+## D
+
+### Demo data
+
+A complete sample platform loaded by `pnpm seed`: a Super Admin, the fully set
+up **Greenfield International School** with 500 students and a sign-in for
+every role, two schools waiting for approval and one suspended school. Every
+demo account uses the password `Schola@2026`.
+
+See [Demo data](/setup/demo-data/). Not to be confused with
+[sample mode](#sample-mode).
+
+## E
+
+### Encrypted fields
+
+Personal details that Schola stores scrambled so that a database leak does not
+expose them: phone numbers, dates of birth and addresses of students,
+teachers, staff and parents (and of admission applicants). Each value is
+encrypted with its own key, which is itself encrypted with a master key
+(`ENCRYPTION_MASTER_KEY`). This is called *envelope encryption*.
+
+*In the code:* <SourceFile path="packages/db/src/crypto.ts" />. See [Encryption](/setup/services/encryption/).
+
+### Enrollment
+
+The placement of one student in one [section](#section) for one
+[academic year](#academic-year), with a [roll number](#roll-number). A student
+has at most one enrollment per academic year. Its status is `active`,
+`transferred`, `graduated` or `withdrawn`.
+
+*In the code:* the `Enrollment` model — `studentId`, `academicYearId`, `sectionId`, `rollNumber`, `status`.
+
+### Envelope
+
+The fixed shape of every API response, so the web app always knows where to
+look. A success is `{ "success": true, "data": …, "meta": … }`; a failure is
+`{ "success": false, "error": { "code", "message", "details" } }`. Error codes
+include `UNAUTHENTICATED`, `FORBIDDEN`, `NOT_FOUND`, `VALIDATION_ERROR`,
+`CONFLICT`, `RATE_LIMITED`, `TENANT_MISMATCH`, `INACTIVE_ACCOUNT` and
+`EMAIL_NOT_VERIFIED`.
+
+*In the code:* <SourceFile path="packages/types/src/envelope.ts" />. See [API conventions](/architecture/api-conventions/).
+
+### Exam
+
+A named assessment in an academic year, such as "Term 1 — Midterm", with a
+start date, an end date, a maximum mark, and the classes and subjects it
+covers. Teachers enter [grades](#grade) against an exam.
+
+*In the code:* the `Exam` model — `name`, `startDate`, `endDate`, `maxMarks`, `classIds`, `subjectIds`. See [Exams](/features/assessment/exams/).
+
+## F
+
+### Fee structure
+
+The price list for a group of students: the items that make up the fee (for
+example Tuition, Lab & technology, Activities & clubs), how often it is billed
+(`one_time`, `monthly`, `quarterly` or `yearly`) and the day of the period it
+is due. [Invoices](#invoice) are generated from a fee structure.
+
+*In the code:* the `FeeStructure` model — `items`, `totalAmount`, `frequency`, `dueDayOfPeriod`. See [Fees](/features/finance/fees/).
+
+## G
+
+### Grade
+
+One student's mark in one subject of one [exam](#exam). Schola stores the marks,
+the percentage and a letter, worked out automatically from the percentage:
+`A+` from 90, `A` from 80, `B` from 70, `C` from 60, `D` from 50, `E` from 40,
+otherwise `F`.
+
+*In the code:* the `Grade` model — `marksObtained`, `maxMarks`, `percentage`, `letter`; <SourceFile path="packages/db/src/models/grade.ts" symbol="gradeLetterFor" />. See [Gradebook](/features/assessment/gradebook/).
+
+## I
+
+### Invoice
+
+A bill for one student for one period (for example March), built from a
+[fee structure](#fee-structure). Its status follows the money: `pending`
+(nothing paid), `partial`, `paid`, `waived` (forgiven in full) or `cancelled`.
+
+*In the code:* the `FeeInvoice` model — `invoiceNumber` (such as `INV-202611-000001`), `periodKey`, `totalAmount`, `amountPaid`, `amountWaived`, `dueDate`, `status`.
+
+## L
+
+### Leave request
+
+A request to be away for a range of dates, by a student, teacher or staff
+member — or by a parent for their child. Someone with <Perm name="leave:approve" />
+approves or rejects it; nobody decides their own. Approving it marks the
+covered school days as `excused` in attendance.
+
+*In the code:* the `LeaveRequest` model — `type` (`sick`, `casual`, `family`, `other`), `status` (`pending`, `approved`, `rejected`, `cancelled`). See [Leave](/features/daily/leave/).
+
+## M
+
+### Member link
+
+The connection between a sign-in account and a person record in a school —
+"this account *is* that student / parent / teacher / staff member". Links,
+not roles, decide which "My …" pages appear in the sidebar: "My classes" for a
+linked teacher, "My children" for a linked parent, and so on.
+
+*In the code:* the `userId` field on the `Student`, `Parent`, `Teacher` and `Staff` models.
+
+## N
+
+### Notification
+
+A message inside Schola, shown under the bell in the top bar and on the
+Notifications page: a school application waiting for review, an approval, an
+announcement, a reminder. Each one belongs to one user.
+
+*In the code:* the `Notification` model. See [Notifications](/features/communication/notifications/).
+
+## P
+
+### Payment
+
+Money received against an [invoice](#invoice): the amount, the method (`cash`,
+`bank_transfer`, `online`, `cheque` or `other`), a reference, who received it
+and when. Every payment gets a [receipt](#receipt) number. Online payments come
+from Stripe Checkout.
+
+*In the code:* the `FeePayment` model — `amount`, `method`, `reference`, `receiptNumber`, `receivedById`. See [Online payments](/features/finance/online-payments/).
+
+### Payslip
+
+One person's pay for one month: the base amount, earnings and deductions from
+their [salary structure](#salary-structure), and the net amount. It starts
+`pending` and becomes `paid` when the salary is paid (or `cancelled`). It can be
+downloaded as a PDF. In the code it is called a **salary record**.
+
+*In the code:* the `SalaryRecord` model — `teacherId` or `staffId`, `year`, `month`, `netAmount`, `payslipNumber` (such as `PAY-202611-000001`), `status`. See [Payroll](/features/finance/payroll/).
+
+### Permission
+
+One specific thing a person is allowed to do, written as a key such as
+<Perm name="student:create" /> or <Perm name="attendance:read:own_classes" />.
+The pattern is `resource:action` or `resource:action:scope`. Every API route
+requires one or more permissions. There are 95 keys.
+
+*In the code:* <SourceFile path="packages/types/src/permissions.ts" />. See [Permissions](/reference/permissions/).
+
+### Platform console
+
+The Super Admin's area of the web app, under <Route path="/platform" />:
+schools, approvals, platform users, the platform-wide audit log, notifications
+and settings.
+
+See [Platform dashboard](/features/platform/dashboard/).
+
+### Primary role
+
+When a person holds several [roles](#role) in a school, the highest one is
+their primary role. It decides which dashboard they land on. The order is
+Super Admin, School Admin, Principal, Vice Principal, Accountant, Teacher,
+Staff, Parent, Student, then the visitor `user` role. Permissions still add up
+across all their roles.
+
+*In the code:* <SourceFile path="apps/api/src/services/rbac/resolver.ts" symbol="resolveUserPermissions" />.
+
+## R
+
+### Receipt
+
+The proof of a [payment](#payment), with a number such as `RCT-202611-000001`.
+Staff, the student and linked parents can download it as a PDF.
+
+*In the code:* <Api method="GET" path="fee-payments/:id/receipt.pdf" perm="fee:read:tenant" /> for school staff, and <Api method="GET" path="student-records/:id/payments/:paymentId/receipt.pdf" /> for the student and their parents.
+
+### Refresh token
+
+The long-lived half of a session. It is a random value in the httpOnly
+`schola_refresh` cookie, valid for 30 days (`JWT_REFRESH_TTL`). The database
+keeps only a hash of it. Each time it is used to get a new
+[access token](#access-token) it is replaced by a new one (rotated), and the
+old one stops working. Signing out revokes it.
+
+*In the code:* the `RefreshToken` model; <Api method="POST" path="auth/refresh" />.
+
+### Remark
+
+A short note a teacher writes about a student. Its type is `academic`,
+`behavior`, `attendance` or `general`. Its visibility decides who can read it:
+`private` (school staff only), `parent` (also the student's parents) or
+`public`.
+
+*In the code:* the `Remark` model — `type`, `visibility`, `body`, `authorId`. See [Remarks](/features/daily/remarks/).
+
+### Report card
+
+A PDF of one student's results in one exam: every subject with marks,
+percentage and letter grade. Staff, the student and linked parents can
+download it.
+
+*In the code:* <Api method="GET" path="student-records/:id/report-card.pdf" /> with `?examId=`.
+
+### Request ID
+
+A unique id for each API request, returned in the `x-request-id` header and
+included in logs and error responses. Quote it when reporting a problem.
+
+*In the code:* <SourceFile path="apps/api/src/middleware/request-id.ts" />.
+
+### Role
+
+A named bundle of [permissions](#permission) — Super Admin, School Admin,
+Principal, Vice Principal, Teacher, Accountant, Student, Parent or Staff. The
+Super Admin's role belongs to the platform; the other eight are created for
+each school when it is approved. A person's role in a school is a row linking
+user, role and school.
+
+*In the code:* the `Role`, `RolePermission` and `UserRole` models. See [Roles at a glance](/start-here/roles-at-a-glance/).
+
+### Roll number
+
+A student's number within their [section](#section) for the year (1, 2, 3 …).
+It is stored on the [enrollment](#enrollment), so it can change from one year to
+the next.
+
+*In the code:* `Enrollment.rollNumber`.
+
+## S
+
+### Salary structure
+
+A pay template, such as "Teacher — Standard": a base amount plus a list of
+earnings (for example a housing allowance) and deductions (for example income
+tax). [Payslips](#payslip) are calculated from it.
+
+*In the code:* the `SalaryStructure` model — `baseAmount`, `components` (each `earning` or `deduction`).
+
+### Sample mode
+
+The "Load sample" button in the school app's top bar. It swaps the page's data
+for an in-browser demo school so you can show the product without real data.
+Nothing is written to the database. "Show real data" switches back. It only
+applies on pages the demo school fully covers (school setup, people,
+attendance, exams, gradebook, remarks, reports and the dashboard); other pages
+keep showing real data with a "Real data on this page." notice.
+
+*In the code:* <SourceFile path="apps/web/src/providers/sample-mode.tsx" />.
+
+### School
+
+One institution using Schola — a school, college, institute or coaching
+centre. Each school is a [tenant](#tenant). Its status is `pending_approval`,
+`active`, `suspended` or `rejected`.
+
+*In the code:* the `School` model. See [How Schola works](/start-here/how-schola-works/#the-life-of-a-school).
+
+### School Admin
+
+The owner of one school, with every permission inside it. Each school's
+applicant becomes its School Admin when the school is approved. Ownership
+moves only by [admin transfer](#admin-transfer).
+
+*Role key:* `school_admin`.
+
+### School app
+
+The area of the web app under <Route path="/app" /> where all eight school
+roles work. Its sidebar shows only the modules the person's permissions and
+[member links](#member-link) allow.
+
+### Section
+
+A group of students inside a [class](#class), such as "Grade 3 · A". A section
+has a section teacher and a capacity (the most students it can hold).
+Attendance is taken per section, and the timetable is per section.
+
+*In the code:* the `Section` model — `classId`, `name`, `capacity`, `teacherId`.
+
+### Single-use token
+
+A secret link sent by email that works once and then expires: password reset
+(60 minutes by default), the set-password invite for a new sign-in (a
+password-reset token lasting 24 times as long, 24 hours by default), email
+verification (72 hours) and admin transfer (24 hours). Each email states the
+configured lifetime. Only a hash of it is stored.
+
+*In the code:* the `SingleUseToken` model with `purpose` `password_reset`, `email_verification` or `admin_transfer`.
+
+### Soft delete
+
+Deleting a record by stamping it with a `deletedAt` date instead of removing
+it. Normal queries then skip it, but it can still be recovered or audited.
+Most Schola records are deleted this way.
+
+*In the code:* `deletedAt` on every model; <SourceFile path="packages/db/src/base.ts" symbol="applySoftDelete" />.
+
+### Subject
+
+Something taught, such as Mathematics, with a short code (`MATH`). Classes list
+the subjects taught at their level; exams and the timetable use subjects.
+
+*In the code:* the `Subject` model — `name`, `code`, `description`. See [Subjects](/features/academics/subjects/).
+
+### Super Admin
+
+The owner of the whole Schola platform. Approves and rejects schools,
+suspends them, manages platform users and settings, and reads every audit log.
+Works in the [platform console](#platform-console), never inside a school.
+
+*Role key:* `super_admin`.
+
+## T
+
+### Tenant
+
+A school, seen from the system's side: one customer of the shared platform.
+All tenants share one database, and every record that belongs to a tenant
+carries its `schoolId`, so one school can never see another's data.
+
+See [Multi-tenancy](/architecture/multi-tenancy/).
+
+### Timetable period
+
+One cell of a section's weekly timetable: a day (Monday to Friday in practice),
+a period number with start and end times, a subject, a teacher and a room. A
+teacher cannot be in two places at once — a clash is refused.
+
+*In the code:* the `TimetableSlot` model. See [Timetable](/features/daily/timetable/).
+
+## V
+
+### Visitor
+
+A signed-in account that does not belong to any school yet — for example
+someone who signed up with a personal account or with Google. Visitors land on
+<Route path="/welcome" />, where they can register a school. "Visitor" is a
+label, not one of the nine product roles; in the code the account holds the
+platform-level `user` role.
+
+See [Onboarding and welcome](/features/accounts/onboarding-and-welcome/).
+
+## W
+
+### Waiver
+
+Forgiving part or all of an [invoice](#invoice). The waived amount is added to
+`amountWaived`, the reason is written into the invoice notes, and the status
+becomes `waived` (nothing was paid), `paid` (the rest was already paid) or
+`partial`. Needs <Perm name="fee:waive" />.
+
+*In the code:* <Api method="POST" path="fee-invoices/:id/waive" perm="fee:waive" />.
+
+### withTenant
+
+The helper every piece of API code must use to read or write school data. It
+takes a model and the request's context and adds the school's `schoolId` to
+every filter, and to every new record, automatically. Its opposite,
+`withSuperAdmin`, has no school filter and is used only on platform routes.
+Querying a school collection without it is forbidden.
+
+*In the code:* <SourceFile path="apps/api/src/repositories/with-tenant.ts" symbol="withTenant" />. See [Multi-tenancy](/architecture/multi-tenancy/).
+
+## Related pages
+
+<CardGrid>
+  <LinkCard title="How Schola works" description="The platform, school and role model in one page." href="/start-here/how-schola-works/" />
+  <LinkCard title="Data model" description="Every collection and how they relate." href="/architecture/data-model/" />
+  <LinkCard title="Statuses" description="Every status value and what moves it." href="/reference/statuses/" />
+  <LinkCard title="Permissions" description="All 95 permission keys." href="/reference/permissions/" />
+</CardGrid>

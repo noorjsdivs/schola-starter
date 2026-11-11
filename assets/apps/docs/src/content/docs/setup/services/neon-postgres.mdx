@@ -1,0 +1,250 @@
+---
+title: Neon Postgres
+description: The optional identity mirror — what Schola copies into Neon Postgres, when, how to set DATABASE_URL and apply the tables, and what happens when it is blank.
+---
+
+import { Aside, Steps, Card, CardGrid, LinkCard, Badge } from '@astrojs/starlight/components';
+import Pipeline from '../../../../components/Pipeline.astro';
+import SourceFile from '../../../../components/SourceFile.astro';
+import Api from '../../../../components/Api.astro';
+import Route from '../../../../components/Route.astro';
+
+[Neon](https://neon.tech) is a hosted, serverless Postgres database. Schola can
+keep a **copy of its sign-in accounts** there: the person, the Google or
+Facebook accounts linked to them, and their email-verification codes. This
+copy is called the *identity mirror*.
+
+The mirror is **optional** and **write-only today**. MongoDB stays the source
+of truth: sign-in, sessions, roles and permissions all read MongoDB, and never
+read Neon. If `DATABASE_URL` is blank, Schola simply skips the mirror and
+everything still works. The tables exist so identity data can move to a
+relational store later (spec lists Neon + Drizzle as the identity database).
+
+## At a glance
+
+<CardGrid>
+  <Card title="Environment variable" icon="setting">
+    `DATABASE_URL` — a Neon Postgres connection string.
+  </Card>
+  <Card title="Required?" icon="information">
+    <Badge text="No" variant="success" /> Blank by default in development,
+    CI and the committed templates.
+  </Card>
+  <Card title="Libraries" icon="puzzle">
+    `@neondatabase/serverless` (Neon's HTTP driver) and `drizzle-orm`, in
+    `packages/db/src/postgres`.
+  </Card>
+  <Card title="Tables" icon="database">
+    `identity_users`, `oauth_accounts`, `email_verifications`.
+  </Card>
+</CardGrid>
+
+## How the mirror works
+
+<Pipeline
+  caption="Every mirror write happens after the MongoDB write has succeeded, and never blocks the request."
+  steps={[
+    { label: 'Request', icon: 'log-in', note: 'Register, verify, social sign-in' },
+    { label: 'MongoDB', icon: 'database', note: 'The real write' },
+    { label: 'DATABASE_URL?', icon: 'settings', note: 'Blank: stop here' },
+    { label: 'Neon', icon: 'server', note: 'Best-effort copy' },
+    { label: 'Response', icon: 'badge-check', note: 'Same either way' },
+  ]}
+/>
+
+```mermaid
+sequenceDiagram
+  participant B as Browser
+  participant A as API
+  participant M as MongoDB
+  participant N as Neon
+  B->>A: POST /api/v1/auth/register
+  A->>M: create user and platform role
+  A->>N: syncIdentity - only if DATABASE_URL is set
+  N-->>A: ok, or an error that is logged and ignored
+  A->>M: create email verification token
+  A->>N: recordIdentityVerification - best-effort
+  A-->>B: 201 Account created
+```
+
+Every call goes through one wrapper, `trySync()` in
+`apps/api/src/services/identity-store.ts`:
+
+- `DATABASE_URL` **blank** → the call returns immediately. Nothing is logged.
+- `DATABASE_URL` **set, write fails** (wrong password, tables missing, Neon
+  down) → the API logs a warning such as `[identity] Neon sync skipped` and
+  carries on. The user never sees an error.
+- `DATABASE_URL` **set, write succeeds** → the row is inserted or updated.
+
+## What is mirrored, and when
+
+| Event in Schola | What the mirror does |
+|---|---|
+| Someone creates an account at <Route path="/signup" /> (<Api method="POST" path="auth/register" />) | Inserts an `identity_users` row with email, names and the argon2id password hash. `email_verified_at` is empty. |
+| A verification email is sent (sign-up, or <Api method="POST" path="auth/verify-email/resend" />) | Inserts an `email_verifications` row with the **hashes** of the link token and the 6-digit code, and the expiry. Skipped if the person has no `identity_users` row. |
+| The person verifies by link or code (<Api method="POST" path="auth/verify-email" />, <Api method="POST" path="auth/verify-email/code" />) | Sets `email_verified_at`. |
+| A password reset is completed (<Api method="POST" path="auth/reset-password" />) | Sets `email_verified_at` (a reset proves the inbox). |
+| Sign-in with the Google or Facebook **redirect** buttons | Inserts or updates `identity_users`, and links the provider in `oauth_accounts`. |
+| `pnpm seed` while `DATABASE_URL` is set | Mirrors every demo account (41 with the default options). |
+
+These paths do **not** write to the mirror: school sign-up
+(<Api method="POST" path="schools/signup" />), the Firebase Google endpoint
+(<Api method="POST" path="auth/google" />), accounts created by an admin
+(teachers, invited platform users, directly created schools), profile edits
+and account deletions.
+
+<Aside type="caution" title="Known gaps in the mirror">
+- **Password changes are not copied.** A completed password reset updates the
+  hash in MongoDB but only marks the email verified in Neon, so
+  `identity_users.password_hash` keeps the old hash.
+- **Coverage is partial.** Because of the paths listed above, Neon does not
+  hold every account. Treat it as an experiment-in-progress, not a second
+  source of truth, until those flows are wired up.
+</Aside>
+
+## The tables
+
+```mermaid
+erDiagram
+  identity_users ||--o{ oauth_accounts : "links"
+  identity_users ||--o{ email_verifications : "has"
+  identity_users {
+    uuid id PK
+    text mongo_user_id UK
+    text email UK
+    timestamptz email_verified_at
+    text password_hash
+    text first_name
+    text last_name
+    text avatar_url
+  }
+  oauth_accounts {
+    uuid id PK
+    uuid user_id FK
+    text provider
+    text provider_account_id
+  }
+  email_verifications {
+    uuid id PK
+    uuid user_id FK
+    text token_hash UK
+    text code_hash
+    timestamptz expires_at
+    timestamptz consumed_at
+  }
+```
+
+- `mongo_user_id` is the bridge: the `_id` of the same person in MongoDB.
+- `oauth_accounts` has a unique index on `(provider, provider_account_id)`.
+- Deleting an `identity_users` row cascades to its OAuth links and
+  verification rows.
+- Tokens and codes are stored as SHA-256 hashes, never in plain text.
+
+The SQL lives in `packages/db/src/postgres/001_identity.sql`; the matching
+Drizzle schema is `packages/db/src/postgres/schema.ts`.
+
+## Pricing in short
+
+Neon has a free plan with a small compute and storage allowance — plenty for
+an identity table — and paid plans for more. Limits change, so check
+[Neon's pricing page](https://neon.tech/pricing) before relying on it in
+production.
+
+## Set it up
+
+<Steps>
+
+1. Sign up at [console.neon.tech](https://console.neon.tech) and create a
+   **project** named `schola`. Choose the region closest to your API host.
+
+2. On the project dashboard click **Connect**. Keep the default branch and
+   database, choose the **pooled** connection, and copy the string. It looks
+   like `postgresql://USER:PASSWORD@ep-xxxx-pooler.region.aws.neon.tech/neondb?sslmode=require`.
+
+3. Paste it into **`DATABASE_URL`** in `test.env` at the repo root (for
+   production: the API host's environment, or
+   `apps/api/.env.production.local`). Leave the committed `.env` blank.
+
+   ```sh title="test.env"
+   DATABASE_URL=postgresql://USER:PASSWORD@ep-xxxx-pooler.region.aws.neon.tech/neondb?sslmode=require
+   ```
+
+4. Create the tables. The migrate script reads `DATABASE_URL` **from your
+   shell only** — it does not load `test.env` — so pass it in explicitly:
+
+   ```sh
+   DATABASE_URL='postgresql://…' pnpm --filter @schola/db db:migrate
+   ```
+
+   It runs `001_identity.sql` (every statement is `IF NOT EXISTS`, so running
+   it twice is safe) and prints `Neon identity tables are ready.`
+
+5. Restart the API (`pnpm --filter @schola/api dev`). The env is read once at
+   boot.
+
+6. Optional: mirror the demo accounts with `pnpm seed -- --reset`.
+
+</Steps>
+
+<Aside type="note" title="It must be Neon">
+The API uses Neon's serverless driver, which talks to Neon over HTTPS. A plain
+local Postgres server is not a drop-in replacement. Also make sure the value
+really is a Postgres URL: `DATABASE_URL` only has to be *a* URL to pass
+validation, so a pasted `mongodb://…` string is accepted at boot and then
+fails on every mirror write.
+</Aside>
+
+## How the code uses it
+
+- <SourceFile path="apps/api/src/services/identity-store.ts" /> — `syncIdentity()`, `recordIdentityVerification()`, `markIdentityVerified()`, all wrapped in `trySync()`.
+- <SourceFile path="packages/db/src/postgres/identity.ts" /> — the Drizzle queries: find by `mongo_user_id`, insert or update, link a provider.
+- <SourceFile path="packages/db/src/postgres/client.ts" symbol="getIdentityDb" /> — one Neon HTTP client per process.
+- <SourceFile path="packages/db/src/postgres/migrate.ts" /> — `pnpm --filter @schola/db db:migrate`.
+- <SourceFile path="apps/api/src/modules/auth/auth.service.ts" /> — `register()`, `sendVerificationEmail()`, `verifyEmail()`, `verifyEmailCode()`, `resetPassword()` and `signInWithOAuthProfile()` call the mirror.
+- <SourceFile path="apps/api/src/seed/run-demo-seed.ts" /> — mirrors the demo accounts when `DATABASE_URL` is set.
+
+## Verify it works
+
+<Steps>
+
+1. In the Neon console open **SQL Editor** and run:
+
+   ```sql
+   select count(*) from identity_users;
+   ```
+
+   A result of `0` (not an error) means the tables exist.
+
+2. Create a fresh account at <Route path="/signup" /> in the web app.
+
+3. Run the query again — the count goes up by one. Then check the code row:
+
+   ```sql
+   select u.email, v.expires_at, v.consumed_at
+   from email_verifications v join identity_users u on u.id = v.user_id
+   order by v.created_at desc limit 5;
+   ```
+
+4. Verify the account with the 6-digit code from the email (or the API log
+   when email goes to the console). `email_verified_at` is now filled.
+
+</Steps>
+
+## Troubleshooting
+
+| Symptom | Cause and fix |
+|---|---|
+| Nothing ever appears in Neon | `DATABASE_URL` is blank in the file that wins (`test.env` beats `.env`), or the account was created by a path that is not mirrored (see the table above). A blank value is silent by design. |
+| API log: `[identity] Neon sync skipped` with `relation "identity_users" does not exist` | The tables were never created. Run the migrate command from step 4. |
+| `DATABASE_URL is required. Copy it from the Neon dashboard into test.env.` | You ran `db:migrate` without the variable in your shell. Prefix the command with `DATABASE_URL='…'`. |
+| `Invalid server environment: DATABASE_URL: Invalid URL` | The value is not a URL — often a stray quote or space. |
+| Password-hash mismatch between MongoDB and Neon | Expected today: password resets are not mirrored. MongoDB is the one that counts. |
+
+## Related pages
+
+<CardGrid>
+  <LinkCard title="MongoDB" description="The source of truth for every account and school record." href="/setup/services/mongodb/" />
+  <LinkCard title="Social sign-in" description="The Google and Facebook flows that create OAuth links." href="/setup/services/social-sign-in/" />
+  <LinkCard title="Authentication" description="Sessions, cookies, verification and password reset." href="/architecture/authentication/" />
+  <LinkCard title="Environment variables" description="Every key Schola reads, in one table." href="/reference/environment-variables/" />
+</CardGrid>

@@ -1,0 +1,240 @@
+---
+title: Audit log
+description: The append-only record of every change in Schola — its shape, when entries are written, which sensitive reads are logged, how secrets are redacted, and where School Admins and the Super Admin read it.
+---
+
+import { Aside, Steps, Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+import Pipeline from '../../../components/Pipeline.astro';
+import SourceFile from '../../../components/SourceFile.astro';
+import Api from '../../../components/Api.astro';
+import Perm from '../../../components/Perm.astro';
+import Roles from '../../../components/Roles.astro';
+import Route from '../../../components/Route.astro';
+import DemoLogin from '../../../components/DemoLogin.astro';
+
+Schools handle money, grades and children's personal details, so "who changed
+this, and when?" must always have an answer. Schola writes an **audit
+entry** every time someone changes business data — adds a student, collects a
+fee, approves a school — and for a few sensitive reads, like downloading a
+payslip or exporting a fee report. Entries are **append-only**: the code
+cannot edit or delete them.
+
+## At a glance
+
+<CardGrid>
+  <Card title="Who reads it" icon="star">
+    <Roles list={['school_admin', 'principal']} note="their school" />
+    <Roles list={['super_admin']} note="every school" />
+  </Card>
+  <Card title="Where" icon="laptop">
+    <Route path="/app/audit-log" /> and <Route path="/platform/audit-log" />
+  </Card>
+  <Card title="Permissions" icon="approve-check">
+    <Perm name="audit_log:read:tenant" /> · <Perm name="audit_log:read:all" />
+  </Card>
+  <Card title="Writer" icon="pencil">
+    <SourceFile path="apps/api/src/services/audit.service.ts" symbol="auditLogger" />
+  </Card>
+</CardGrid>
+
+<DemoLogin as="School Admin" email="admin@greenfield.example" go="/app/audit-log" />
+
+## How an entry is written
+
+<Pipeline
+  caption="The audit write happens after the change succeeds, inside the same request."
+  steps={[
+    { label: 'Validate', icon: 'badge-check', note: 'Permission + Zod' },
+    { label: 'Change data', icon: 'database', note: 'withTenant write' },
+    { label: 'auditLogger.log', icon: 'scroll', note: 'Redact, add metadata' },
+    { label: 'Append', icon: 'file-text', note: 'audit_logs insert' },
+    { label: 'Respond', icon: 'send', note: 'ok(data)' },
+  ]}
+/>
+
+Each route calls the logger itself, right after its write:
+
+```ts title="apps/api/src/modules/people/students.routes.ts (create)"
+const created = await withTenant(Student, ctx).create({ /* … */ });
+await auditLogger.log(
+  {
+    schoolId: ctx.schoolId,
+    actorId: ctx.userId,
+    actorRoleAtTime: ctx.role,
+    action: "student.create",
+    resource: "student",
+    resourceId: created._id,
+    after: { admissionNumber: created.admissionNumber },
+  },
+  meta(req), // { ip, userAgent, requestId }
+);
+res.status(201).json(ok(withDecryptedPii(created)));
+```
+
+## The shape of an entry
+
+The model is <SourceFile path="packages/db/src/models/audit-log.ts" symbol="AuditLog" />
+(collection `auditlogs`; spec name `audit_logs`).
+
+| Field | Type | Meaning |
+|---|---|---|
+| `schoolId` | `ObjectId \| null` | The school the change belongs to; `null` for platform events (sign-ins without a school, system settings) |
+| `actorId` | `ObjectId \| null` | The user who did it |
+| `actorRoleAtTime` | `string` | Their primary role **at that moment** (roles can change later) |
+| `action` | `string` | `<resource>.<verb>`, e.g. `student.create`, `fee.waive`, `school.approve` |
+| `resource` | `string` | What kind of record, e.g. `student`, `fee_payment` |
+| `resourceId` | `ObjectId \| null` | Which record |
+| `before`, `after` | any (redacted) | Snapshots or just the fields that matter |
+| `metadata` | object | `ip`, `userAgent`, `requestId`, plus extras such as `reason` or `category` |
+| `createdAt` | `Date` | When. There is no `updatedAt` — entries never change. |
+
+Indexes: `{ schoolId: 1, createdAt: -1 }`, `{ actorId: 1, createdAt: -1 }`,
+plus single-field indexes on `schoolId`, `actorId` and `action`.
+
+### Append-only, enforced by the model
+
+```ts title="packages/db/src/models/audit-log.ts"
+AuditLogSchema.pre(["updateOne", "updateMany", "findOneAndUpdate"], function () {
+  throw new Error("audit_logs is append-only");
+});
+AuditLogSchema.pre(["deleteOne", "deleteMany", "findOneAndDelete"], function () {
+  throw new Error("audit_logs is append-only");
+});
+```
+
+Any Mongoose update or delete on `AuditLog` throws. There is no soft delete
+and no TTL index, so entries are **kept forever**.
+
+### Redaction
+
+Before saving, `auditLogger.log` walks `before` and `after` recursively and
+replaces the value of any key named `password`, `passwordHash`, `token`,
+`tokenHash`, `refreshToken`, `secret`, `apiKey`, `csrfToken`, `phone`,
+`dateOfBirth` or `address` with `"[REDACTED]"`. Encrypted personal data is
+never copied into the log — not even as ciphertext.
+
+### A failed audit write never fails the request
+
+```ts title="apps/api/src/services/audit.service.ts"
+} catch (err) {
+  // Never let an audit failure mask the underlying operation — log it loudly.
+  logger.error({ err, entry }, "audit log write failed");
+}
+```
+
+## When entries are written
+
+### Every mutation
+
+About 120 call sites write entries. The actions, grouped:
+
+| Area | Actions |
+|---|---|
+| Sign-in and account | `auth.register`, `auth.login`, `auth.logout`, `auth.google.register`, `auth.google.login`, `auth.facebook.register`, `auth.facebook.login`, `auth.email.verified`, `auth.password_reset.request`, `auth.password_reset.complete`, `auth.password.change`, `auth.session.revoke`, `auth.session.revoke_others`, `user.profile.update` |
+| Platform | `school.signup`, `school.signup.quick`, `school.approve`, `school.reject`, `school.suspend`, `school.reactivate`, `school.create_direct`, `school.force_admin_transfer`, `user.invite_platform`, `user.suspend`, `user.reactivate`, `user.role.grant`, `user.role.revoke`, `system_setting.update` |
+| School administration | `school.update`, `user_role.grant`, `user_role.revoke`, `admin_transfer.initiate`, `admin_transfer.complete`, `notification.announce`, `notification.mark_all_read` |
+| Academics | `academic_year.*`, `subject.*`, `class.*`, `class.assign_teacher`, `section.*`, `enrollment.create`, `enrollment.update`, `enrollment.reactivate` |
+| People | `student.*`, `teacher.*`, `parent.*`, `staff.*` (`create`, `update`, `delete`) |
+| Daily work | `attendance.mark`, `staff_attendance.mark`, `timetable.delete`, `leave.request`, `leave.approve`, `leave.cancel`, `remark.create`, `remark.delete` |
+| Assessment | `exam.create`, `exam.update`, `exam.delete`, `grade.enter` |
+| Finance | `fee_structure.create`, `fee_structure.update`, `fee_invoice.generate`, `fee.collect`, `fee.waive`, `fee.checkout.open`, `salary_structure.create`, `salary_structure.update`, `payroll.generate`, `salary.pay` |
+| Campus | `admission.create`, `admission.update`, `admission.status`, `admission.enroll`, `admission.delete`, `library.book.*`, `library.loan.issue`, `library.loan.return`, `transport.route.*`, `transport.rider.assign`, `transport.rider.remove`, `hostel.room.*`, `hostel.allocate`, `hostel.vacate` |
+
+The operator CLI `grant-role` writes entries too.
+
+### Sensitive reads
+
+The original spec: reads are not logged by default, except sensitive ones. These call
+`auditLogger.logRead()`, which stores `before: null` and
+`after: { read: true, fields: [...] }`:
+
+| Action | Endpoint | `fields` |
+|---|---|---|
+| `fee.receipt.download` | <Api method="GET" path="fee-payments/:id/receipt.pdf" />, <Api method="GET" path="student-records/:id/payments/:paymentId/receipt.pdf" /> | `receipt` |
+| `grade.report_card.download` | <Api method="GET" path="student-records/:id/report-card.pdf" /> | `grades`, `report_card` |
+| `payroll.payslip.download` | <Api method="GET" path="salary-records/:id/payslip.pdf" />, <Api method="GET" path="me/payslips/:id/payslip.pdf" /> | `payslip` |
+| `admission.read` | <Api method="GET" path="admissions/:id" /> | `dateOfBirth`, `address`, `guardianPhone` |
+| `report.fees.export` | <Api method="GET" path="reports/fees/export.csv" /> | `csv` |
+| `report.attendance.export` | <Api method="GET" path="reports/attendance/export.csv" /> | `csv` |
+| `report.payroll.export` | <Api method="GET" path="reports/payroll/export.csv" /> | `csv` |
+
+## Reading the log
+
+### In a school — <Route path="/app/audit-log" />
+
+<Steps>
+
+1. Sign in as a School Admin or Principal and open **Administration →
+   Audit log** in the sidebar.
+2. Narrow the list with **From**, **To** (dates) and **Action** (an exact
+   action name such as `student.create` or `fee.collect`).
+3. Each row shows the action, the time, the resource, the last six
+   characters of the resource ID, the actor's role and the first eight
+   characters of the request ID. When an entry has `before` / `after`
+   snapshots that differ, a "N changes" button opens a Before / After table
+   of the changed fields.
+4. While the list loads you see placeholder rows; if it fails, "The audit log
+   could not be loaded." with a **Try again** button; with no hits, "No
+   matching entries".
+
+</Steps>
+
+It calls <Api method="GET" path="audit-logs" perm="audit_log:read:tenant" />
+with `from`, `to`, `actorId`, `action`, `page`, `pageSize` (≤ 100). The
+filter always starts `{ schoolId: ctx.schoolId }`, newest first. `from` and
+`to` are whole UTC days: `to` keeps everything up to the end of that day
+(`inclusiveDayFilter` in `apps/api/src/utils/dates.ts`).
+
+### On the platform — <Route path="/platform/audit-log" />
+
+The Super Admin's **Activity → Audit log** page calls
+<Api method="GET" path="platform/audit-logs" perm="audit_log:read:all" /> with
+the same filters and **no** school filter — every school and every platform
+event.
+
+### Reused by announcements
+
+The **Announcements** history (<Route path="/app/announcements" />) is not a
+separate collection: <Api method="GET" path="notifications/announcements" />
+reads this school's `notification.announce` audit entries and shows their
+`after` snapshot (title, body, audience, recipient count).
+
+## Edge cases and gotchas
+
+<Aside type="caution" title="Logged by each route, not by the repository">
+The original spec says repository wrappers call the
+logger automatically. In the code, `withTenant` does not audit — every route
+calls `auditLogger.log()` explicitly. A new mutating route that forgets the
+call writes nothing.
+</Aside>
+
+<Aside type="caution" title="The audit write is not transactional">
+The entry is written **after** the change, and a failed audit insert is only
+logged — the change stays, with no audit entry. (Email failures no longer get
+in the way: school sign-up, approval and rejection catch and log them, then
+still write their audit entries.)
+</Aside>
+
+- **Only the first 100 entries show.** Both screens request `pageSize: 100`
+  and have no pager. Narrow the dates or action to see older entries.
+- **Days are UTC days.** `to=2026-11-07` keeps entries up to
+  `2026-11-08T00:00:00Z` (exclusive). Someone far from UTC may see an entry
+  made late in their evening fall on the next day.
+- **Redaction is by key name only.** Fields such as `email`, `firstName` or
+  free-text `reason` are stored as given — `auth.register` keeps the email
+  and name in `after`.
+- **Reading a student profile is not audited.** <Api method="GET" path="students/:id" />
+  returns decrypted phone, date of birth and address without a `logRead`
+  entry; the original spec only requires salary views and report exports.
+- **Cursor helpers are unused.** <SourceFile path="apps/api/src/repositories/audit.repo.ts" />
+  has cursor-paginated `listForTenant` / `listAll`, but the routes use offset
+  pagination directly on the model.
+
+## Related pages
+
+<CardGrid>
+  <LinkCard title="Audit log screen" description="The School Admin's audit log, step by step." href="/features/insight/audit-log/" />
+  <LinkCard title="Platform notifications and audit" description="The Super Admin's view of every school." href="/features/platform/notifications-and-audit/" />
+  <LinkCard title="Request lifecycle" description="Where the request ID in each entry comes from." href="/architecture/request-lifecycle/" />
+  <LinkCard title="Security" description="How the audit log fits the spec controls." href="/architecture/security/" />
+</CardGrid>

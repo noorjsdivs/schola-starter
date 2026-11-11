@@ -1,0 +1,507 @@
+---
+title: Troubleshooting
+description: Common Schola problems in development and production — database connections, secrets, sign-in, cookies and CSRF, social sign-in, Stripe, ports, builds, the demo seed and tests — each with the symptom, the cause and the fix.
+---
+
+import { Aside, Card, CardGrid, LinkCard, Steps } from '@astrojs/starlight/components';
+import SourceFile from '../../../components/SourceFile.astro';
+import Api from '../../../components/Api.astro';
+import Perm from '../../../components/Perm.astro';
+
+Each entry below starts with the **symptom** — what you see on screen or in a
+terminal — then the **cause** in the code, then the **fix**. The messages are
+quoted exactly as the code writes them, so you can search this page for the
+text you see (press <kbd>⌘K</kbd>).
+
+## First checks
+
+<Steps>
+
+1. **Is the API up?** Open `http://localhost:8000/api/v1/health` (production:
+   `https://schola.reactbd.com/api/v1/health`). You should see
+   `{"success":true,"data":{"ok":true,…}}`.
+
+2. **Read the error envelope.** In the browser's DevTools → Network, open the
+   failing `/api/v1/…` request. The body is
+   `{ "success": false, "error": { "code", "message", "requestId" } }`. The
+   `code` tells you which section of this page to read.
+
+3. **Find it in the API log.** Every response carries an `x-request-id`
+   header. Search the API terminal (or your log drain) for that id to see the
+   full error and stack.
+
+4. **Check which env file won.** Development reads `test.env`, then `.env`;
+   production reads `apps/api/.env.production.local`, then
+   `apps/api/.env.production`. Variables set in the shell or the host beat
+   every file. See [Deployment](/operations/deployment/#precedence).
+
+</Steps>
+
+| `error.code` | HTTP | Jump to |
+| --- | --- | --- |
+| `UNAUTHENTICATED` | 401 | [Sign-in and sessions](#sign-in-and-sessions) |
+| `EMAIL_NOT_VERIFIED` | 403 | [Email not verified](#email_not_verified-on-sign-in) |
+| `INACTIVE_ACCOUNT` | 401 / 403 | [Account is not active](#account-is-not-active) |
+| `FORBIDDEN` | 403 | [CSRF](#missing-or-invalid-csrf-token) or [permissions](#missing-permission) |
+| `TENANT_MISMATCH` | 403 | [This route requires a tenant context](#this-route-requires-a-tenant-context) |
+| `RATE_LIMITED` | 429 | [Too many requests](#too-many-requests) |
+| `INTERNAL_ERROR` | 500 / 503 | the API log — often [encryption](#encryption-key-problems) or [Stripe](#payments-and-stripe) |
+
+## Start-up and database
+
+### API exits with "failed to start" and a server selection error
+
+**Symptom.** `pnpm dev` (or the API host) logs `failed to start` with
+`MongooseServerSelectionError` or `MongoServerSelectionError … ECONNREFUSED`,
+after about 30 seconds. The seed prints `Seed failed:` with the same error
+after 10 seconds.
+
+**Cause.** The API could not reach MongoDB at `MONGODB_URI`. Locally, MongoDB
+isn't running. On Atlas, the most common cause is **Network Access**: the
+machine's IP address is not on the cluster's allow-list. A wrong user or
+password shows as an authentication error instead.
+
+**Fix.**
+- Local: start MongoDB (`brew services start mongodb-community`, Docker, …) and
+  check `MONGODB_URI=mongodb://localhost:27017/schola`.
+- Atlas: **Network Access → Add IP Address** with your current IP (or the API
+  host's outbound IPs). Wait a minute for it to apply.
+- Atlas authentication: URL-encode special characters in the password
+  (`@` → `%40`), and check the database user has access to the database named
+  in the URI.
+
+See [MongoDB](/setup/services/mongodb/).
+
+### "Invalid server environment"
+
+**Symptom.** The API (or `pnpm seed`, or `grant-role`) exits with
+`Invalid server environment:` followed by lines like `- JWT_ACCESS_SECRET: …`.
+
+**Cause.** <SourceFile path="packages/config/src/server.ts" /> validates every
+variable with Zod. Typical failures: `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`
+or `CSRF_SECRET` shorter than 32 characters; `APP_URL` or
+`IMAGEKIT_URL_ENDPOINT` not a full URL; `FIREBASE_CLIENT_EMAIL` not an email;
+`NODE_ENV` not `development`, `test` or `production`.
+
+**Fix.** Correct the named key. Generate secrets with `openssl rand -hex 32`.
+Blank values are fine — the loader turns empty strings into "not set".
+
+### "Production env missing required values"
+
+**Symptom.** With `NODE_ENV=production` the API exits with
+`Production env missing required values: MONGODB_URI, …`.
+
+**Cause.** In production these must be set explicitly: `MONGODB_URI`,
+`APP_URL`, `COOKIE_DOMAIN`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`,
+`CSRF_SECRET`, `ENCRYPTION_MASTER_KEY`, `RESEND_API_KEY`,
+`IMAGEKIT_PUBLIC_KEY`, `IMAGEKIT_PRIVATE_KEY`, `IMAGEKIT_URL_ENDPOINT`. The
+same check runs for CLI jobs such as `grant-role`.
+
+**Fix.** Set the listed keys as host variables or in
+`apps/api/.env.production.local`.
+
+### Port already in use
+
+**Symptom.** `pnpm dev` stops before starting anything with "pnpm dev can't
+start — these ports are already in use", listing the port, the app that needs
+it and the process holding it. Started on its own, the API logs "Port 8000 is
+already in use — another API (or `pnpm dev`) is still running." Next.js, started
+alone, prints `Port 3000 is in use, trying 3001 instead`.
+
+**Cause.** An old dev server (or another app) still holds the port — most often
+a `pnpm dev` left running in another terminal.
+
+**Fix.** Stop the process the message names: `Ctrl+C` in its terminal, or
+`kill <pid>` (find it with `lsof -nP -iTCP:8000 -sTCP:LISTEN`, or `:3000`,
+`:3002`). Don't let the web app drift to `3001`: `APP_URL`,
+`CORS_ORIGIN` and the OAuth origin list all expect `http://localhost:3000`, so
+email links, Stripe returns and social sign-in break on another port.
+
+## Encryption key problems
+
+Phone numbers, dates of birth and addresses of users, students, parents,
+teachers, staff and admission applicants are encrypted with
+`ENCRYPTION_MASTER_KEY` (<SourceFile path="packages/db/src/crypto.ts" />).
+
+### `missing ENCRYPTION_MASTER_KEY`
+
+**Symptom.** In development the API starts, but saving or opening a person
+with a phone, birthday or address fails with `500 INTERNAL_ERROR` "Something
+went wrong." The API log shows `EncryptionError: missing ENCRYPTION_MASTER_KEY`.
+`pnpm seed` refuses outright: `ENCRYPTION_MASTER_KEY is not set. Generate one
+with openssl rand -base64 32 and put it in test.env`.
+
+**Cause.** Development does not require the key at start-up (production
+does), so the error only appears when a record is encrypted or decrypted.
+
+**Fix.** `openssl rand -base64 32`, put it in `test.env` as
+`ENCRYPTION_MASTER_KEY=…`, restart the API.
+
+### `ENCRYPTION_MASTER_KEY must decode to 32 bytes (got N)`
+
+**Cause.** The value is not base64 of exactly 32 bytes — for example a hex
+string, or a key with a character missing.
+
+**Fix.** Generate it with `openssl rand -base64 32` (44 characters ending in
+`=`), not `-hex`.
+
+### `key rotation required: payload encrypted with keyId=…, current=…`
+
+**Symptom.** Lists and profiles of people fail with `500`; the log shows this
+message.
+
+**Cause.** The records were encrypted with a **different** master key than the
+one the API has now (the `keyId` is the first 8 bytes of the key). Typical
+after copying a database between machines, or regenerating the key.
+
+**Fix.** Put the original key back — data encrypted with a lost key cannot be
+recovered. On a development database that only holds demo data,
+`pnpm seed -- --reset` rebuilds it with the current key. There is no
+key-rotation tool yet.
+
+## Sign-in and sessions
+
+### "Invalid email or password."
+
+**Cause.** No account with that email, or the wrong password. The message is
+the same for both on purpose. Each wrong password counts towards the lockout.
+
+**Fix.** Check the email (the demo accounts end in `.example`, password
+`Schola@2026` — see [Demo accounts](/reference/demo-accounts/)). Use "Forgot
+password" otherwise.
+
+### `EMAIL_NOT_VERIFIED` on sign-in
+
+**Symptom.** The login form says "Verify your email before logging in. Open the
+link we sent, or enter the 6-digit code on the verification page." The API
+answered `403 EMAIL_NOT_VERIFIED`.
+
+**Cause.** The account was created with `POST /auth/register` and
+`emailVerifiedAt` is still empty. Password sign-in checks it after the password.
+
+**Fix.**
+- Open the link in the verification email, or enter the 6-digit code at
+  `/verify`. Both are valid for `EMAIL_VERIFICATION_TTL_HOURS` (72 hours).
+- **In development** with `RESEND_API_KEY` and `SMTP_HOST` blank, nothing is
+  emailed: the console transport logs `[email/console] would have sent email`
+  in the API terminal with the full message — copy the link or code from there.
+- Lost or expired email: type the address on `/verify` and click **Send a new
+  code**. The API always answers with the same toast and sends at most one
+  email per address per minute.
+- A school owner's email is marked verified automatically when the Super Admin
+  approves the school; `grant-role --role super_admin` also marks it verified.
+
+### Account is not active
+
+**Symptom.** Sign-in is refused with `403 INACTIVE_ACCOUNT`; the login form
+shows the API's message. Signed-in requests may also start failing with
+`401 INACTIVE_ACCOUNT`. Google or Facebook sign-in lands on
+`/login?error=oauth_denied`.
+
+**Cause.** Either the account or its school is closed. The message says which:
+- "Your school's application is waiting for approval. You'll get an email
+  when it's approved." — the owner of a school still in `pending_approval`;
+  the account is activated on approval.
+- "Account is not active." / "Account is inactive." — `isActive` is `false`,
+  for example an account the Super Admin suspended on `/platform/users`. (The
+  owner of a `rejected` school is soft-deleted and gets "Invalid email or
+  password.")
+- "This school is suspended, so sign-in is paused for everyone there…" (or
+  "…still waiting for approval…", "…was rejected…") — every school the account
+  belongs to is closed.
+
+**Fix.** The Super Admin approves the school, reactivates the school on
+`/platform/schools/[id]`, or reactivates the user
+(<Api method="POST" path="platform/users/:id/reactivate" perm="user:suspend" />).
+A social sign-in never re-opens a closed account.
+
+### "Account temporarily locked. Try again later."
+
+**Cause.** `LOGIN_LOCKOUT_THRESHOLD` (default 5) wrong passwords set
+`lockedUntil` to now + `LOGIN_LOCKOUT_MINUTES` (default 15). While locked,
+even the right password is refused.
+
+**Fix.** Wait out the lock, or reset the password — a completed reset clears
+`failedLoginAttempts` and `lockedUntil`. Once a lock has expired, the count
+starts again from zero, so it takes another five wrong passwords to lock the
+account again.
+
+### "This account uses google sign-in. Use that button instead of a password."
+
+**Cause.** The account was created through Google or Facebook and has no
+password hash.
+
+**Fix.** Use the matching button, or "Forgot password" to set a password.
+
+### Signed in, but bounced back to `/login`
+
+**Symptom.** The login succeeds, then the next page shows "Checking access" and
+returns to `/login?next=…`. The API log (development) shows
+`[requireAuth] no access cookie` with the cookie names it received.
+
+**Cause.** The browser did not store or send the `schola_access` cookie. See
+[Cookies are not set](#cookies-are-not-set).
+
+### "Missing access token." / "Refresh token invalid or expired."
+
+**Cause.** The 15-minute access token expired and the 30-day refresh token is
+gone, revoked (signed out elsewhere, password changed) or expired. The web
+client tries one silent `POST /auth/refresh` on the first `401`.
+
+**Fix.** Sign in again.
+
+## Cookies and CSRF
+
+### Cookies are not set
+
+**Symptom.** `POST /api/v1/auth/login` returns `200`, but DevTools →
+Application → Cookies shows no `schola_access`, or shows a warning next to the
+`Set-Cookie` header.
+
+**Cause.** One of the cookie options doesn't fit the address in the browser
+(<SourceFile path="apps/api/src/utils/cookies.ts" />):
+- `COOKIE_DOMAIN` doesn't match the host. With `.schola.reactbd.com` the
+  browser rejects the cookie on `localhost` or on a `*.vercel.app` preview URL.
+  With `COOKIE_DOMAIN=localhost` the API leaves the `Domain` attribute out, which
+  is what development needs.
+- In production (`NODE_ENV=production`) cookies are `Secure`, so they are never
+  stored over plain `http://`.
+- The browser called the API on another origin (an absolute
+  `NEXT_PUBLIC_API_BASE_URL`), so the cookie belongs to the API's host, not the
+  site's.
+
+**Fix.** Development: `COOKIE_DOMAIN=localhost` and browse
+`http://localhost:3000`. Production: serve over HTTPS and set `COOKIE_DOMAIN`
+to the real domain (`.schola.reactbd.com`). Keep
+`NEXT_PUBLIC_API_BASE_URL=/api/v1` so the API is same-origin.
+
+### "Missing or invalid CSRF token."
+
+**Symptom.** A save, delete or other write answers `403 FORBIDDEN` with this
+message; reads work.
+
+**Cause.** Every `POST`, `PUT`, `PATCH` and `DELETE` on a signed-in route must
+send the `schola_csrf` cookie's value in the `x-csrf-token` header, and the
+value must have been signed with the current `CSRF_SECRET`. It fails when:
+- you call the API from curl, Postman or a test without the header;
+- the `schola_csrf` cookie is missing (cleared, or never set — see above);
+- `CSRF_SECRET` changed since the cookie was issued. In development an unset
+  `CSRF_SECRET` falls back to a built-in value, so adding one to `test.env`
+  invalidates every existing cookie.
+
+**Fix.** Get a fresh token with `GET /api/v1/auth/csrf` (it sets the cookie and
+returns `{ csrfToken }`) and send it as `x-csrf-token`. In the browser, sign out
+and in again after changing `CSRF_SECRET`. The web client adds the header
+automatically.
+
+### "CORS: origin … is not allowed"
+
+**Symptom.** Requests fail with `500 INTERNAL_ERROR` "Something went wrong."
+and the API log shows `CORS: origin https://… is not allowed`.
+
+**Cause.** The browser sent an `Origin` that isn't in `CORS_ORIGIN`. This only
+happens when the browser talks to the API directly — normally all calls go
+through the web app's `/api/*` rewrite and are same-origin.
+
+**Fix.** Use `NEXT_PUBLIC_API_BASE_URL=/api/v1`, or add the origin to
+`CORS_ORIGIN` (comma-separated) and restart the API.
+
+## Permissions and school context
+
+### Missing permission
+
+**Symptom.** `403 FORBIDDEN` with `Missing permission: fee:read:tenant` (or
+`Missing one of: …`). In the app, a page you typed into the address bar shows
+an error card.
+
+**Cause.** None of your roles in this school holds the key. Pages outside your
+sidebar still open, but their data is refused.
+
+**Fix.** Check the [permission matrix](/reference/permissions/). A School
+Admin can grant Principal, Vice Principal or Accountant on `/app/members`. If
+you just added a key to `ROLE_PERMISSIONS` in code, **restart the API** — the
+bundles are re-applied to schools at start-up.
+
+### "This route requires a tenant context."
+
+**Cause.** `403 TENANT_MISMATCH`: a school route was called without a school in
+the session. The Super Admin and visitors have no school.
+
+**Fix.** Expected for those accounts. Sign in as a school member to use
+`/app/*` data.
+
+### Own-scope refusals
+
+| Message | Cause |
+| --- | --- |
+| "Cannot mark attendance for this section." / "Cannot read attendance for this section." | The teacher neither leads the section (`Section.teacherId`) nor is homeroom teacher of its class (`Class.classTeacherId`). |
+| "Cannot enter grades for this section." / "Cannot read grades for this section." | Same rule, for the gradebook. |
+| "This student is not in one of your sections." | A teacher writing a remark about a student outside their sections. |
+| "You can only ask leave for your own children." | A parent asking leave for a student not linked to them. |
+| "Someone else has to decide your own leave request." | An approver deciding their own request. |
+| "You can't view this part of the record." | The student-record area (fees, grades…) isn't open to this caller; an unknown or unrelated student reads as `404` instead. |
+
+Fix: assign the teacher to the section or class, or link the parent to the
+child on the parent's record.
+
+### Too many requests
+
+**Symptom.** `429 RATE_LIMITED` "Too many auth requests." or "Too many
+requests."
+
+**Cause.** In-memory limits per minute: auth routes 10 per IP in production (60
+in development); school routes 120 per account; platform routes 60 per account.
+
+**Fix.** Wait a minute. Restarting the API clears the counters. In production
+behind proxies, check that `req.ip` is the visitor's address, or everyone
+shares one auth budget.
+
+## Social sign-in
+
+### Google shows `Error 400: redirect_uri_mismatch`
+
+**Cause.** The API sends `redirect_uri = <origin>/api/v1/auth/oauth/google/callback`,
+where `<origin>` is the page's origin if it is one of `http://localhost:3000`,
+`http://127.0.0.1:3000`, `https://schola.reactbd.com` or `APP_URL` — otherwise
+`APP_URL`. That exact string isn't registered in the Google Cloud console.
+
+**Fix.** Under **APIs & Services → Credentials → your OAuth client →
+Authorized redirect URIs**, add the exact URI, including scheme and port —
+`http://localhost:3000/api/v1/auth/oauth/google/callback` for development and
+`https://schola.reactbd.com/api/v1/auth/oauth/google/callback` for production.
+`localhost` and `127.0.0.1` are different URIs. Facebook's equivalent is
+"URL blocked" — add the same path under **Valid OAuth Redirect URIs**.
+
+### Back on `/login` with `?error=oauth_…`
+
+| `error=` | Cause | Fix |
+| --- | --- | --- |
+| `oauth_unconfigured` | `GOOGLE_OAUTH_CLIENT_ID`/`_SECRET` (or the Facebook pair) is blank. | Fill both in and restart the API. |
+| `oauth_state` | The 10-minute `schola_oauth` state cookie is missing, expired, or doesn't match — the flow took too long, or started on one host and returned to another. | Start again from the same address. |
+| `oauth_denied` | The person cancelled, the code exchange failed, or the provider is unknown. | Try again; check the client secret. |
+| `oauth_email` | The provider returned no (verified) email address. | Use an account with a verified email. |
+
+### "Google sign-in is not configured."
+
+**Cause.** `503` from `POST /auth/google` (the Firebase button): one of
+`FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY` is
+missing on the API. "Google account email is not verified." means the Google
+account itself is unverified.
+
+**Fix.** Set all three (paste the private key as-is; `\n` is normalised). See
+[Social sign-in](/setup/services/social-sign-in/).
+
+## Payments and Stripe
+
+### "Stripe is not configured. Set STRIPE_SECRET_KEY."
+
+**Cause.** `503` from a checkout endpoint: `STRIPE_SECRET_KEY` is blank.
+
+**Fix.** Add a test key (`sk_test_…`) to `test.env` and restart.
+
+### The webhook answers `400` — "stripe webhook signature rejected"
+
+**Symptom.** `stripe listen` (or the Stripe Dashboard) shows `400` for
+`POST /api/v1/stripe/webhook`; the API log says `stripe webhook signature
+rejected`. The invoice stays unpaid after a successful Checkout.
+
+**Cause.** `STRIPE_WEBHOOK_SECRET` is not the signing secret of the endpoint
+that sent the event — for example the secret from the Dashboard endpoint while
+events come from `stripe listen`, or an old `stripe listen` secret.
+
+**Fix.** Development: copy the `whsec_…` that `stripe listen` prints into
+`test.env` and restart the API. Production: use the Dashboard endpoint's secret.
+The route reads the raw body on purpose — don't put a JSON-parsing proxy in
+front of it.
+
+### The webhook answers `503 { received: false }`
+
+**Cause.** `STRIPE_WEBHOOK_SECRET` is blank.
+
+### Paid in Checkout, invoice still `pending`
+
+**Cause.** The webhook never arrived. In development `pnpm --filter @schola/api
+dev` starts `stripe listen` alongside the API; it needs the Stripe CLI to be
+logged in (`stripe login`, once). If the API is started another way, run
+`pnpm --filter @schola/api stripe:listen`.
+
+**Fix.** Start the listener, then resend the event from the Dashboard or pay
+again. See [Stripe](/setup/services/stripe/).
+
+## Web app and builds
+
+### `Module not found: Can't resolve './base.js'` (or another `.js` file)
+
+**Cause.** The shared packages are TypeScript sources that import each other
+with `.js` extensions. `next.config.ts` maps `.js` to `.ts` with
+`experimental.extensionAlias`, which **only webpack honours**. Running
+`next dev` or `next build` without `--webpack` uses Turbopack, which ignores it.
+
+**Fix.** Use the package scripts — `pnpm --filter @schola/web dev` / `build`
+run `next dev --webpack` / `next build --webpack`. On Vercel, make sure the
+build command runs the package's `build` script.
+
+### Every API call from the deployed site fails
+
+**Cause.** The `/api/*` rewrite in `next.config.ts` is computed at **build**
+time from `INTERNAL_API_URL`. If it was missing during the build, the site
+forwards to `http://localhost:8000`.
+
+**Fix.** Set `INTERNAL_API_URL` for the build environment and redeploy.
+
+### The web terminal shows `ECONNREFUSED 127.0.0.1:8000` / pages show "could not be loaded"
+
+**Cause.** The web app is up but the API is not (it crashed or never started),
+so the rewrite has nothing to forward to.
+
+**Fix.** Look at the API terminal for the start-up error (see the database and
+environment entries above).
+
+### Signed-out visitors briefly see "Checking access"
+
+**Cause.** Not a bug in your setup: `apps/web/proxy.ts`, which would redirect
+on the server, is not loaded by Next.js (it should be at `apps/web/src/proxy.ts`).
+The client-side `RequireRole` guard does the redirect instead. See
+[Web routes](/reference/web-routes/#how-access-is-decided).
+
+## Demo seed
+
+| Message | Cause | Fix |
+| --- | --- | --- |
+| "Demo data is already in this database. Re-run with --reset to remove it and seed a fresh copy." | `pnpm seed` found demo accounts (`*.example`) or their schools. | `pnpm seed -- --reset`. Only demo data is removed. |
+| "ENCRYPTION_MASTER_KEY is not set. …" | No key in `test.env` / `.env`. | `openssl rand -base64 32` into `test.env`. |
+| "Refusing to seed demo accounts with NODE_ENV=production. …" | You are pointing at production. | Don't. If you truly mean it: `--allow-production` and your own strong `--password`. |
+| "--students must be a whole number from 20 to 600 (20 sections × 30 seats)." | Bad `--students`. | Pick 20–600. |
+| "--password: …" | The custom password fails the policy (8+ characters, upper, lower, digit). | Choose a stronger one. |
+| "Index check skipped for `Model`: …" | An existing index has different options. | Usually harmless; the data is still valid. |
+
+## Tests
+
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| API tests time out in `beforeAll` on the first run. | `mongodb-memory-server` is downloading MongoDB (~66 MB) or can't reach the internet. | Run once online; the binary is cached in `~/.cache/mongodb-binaries`. |
+| Playwright fails on a second full run. | The specs change the shared demo school. | `pnpm seed -- --reset` before each full run. |
+| Playwright can't sign in. | The database isn't seeded, or you seeded with another `--password`. | `pnpm seed`, and set `E2E_PASSWORD` if needed. |
+| `429` in an integration test. | Many logins in one file hit the in-process auth limiter. | Reuse a `request.agent`. |
+
+## Production-only gotchas
+
+- **"index build failed for some models" in the API log.** The API builds
+  every model's indexes on a production boot. On a database created before
+  that fix, the old plain `expiresAt_1` index on `refreshtokens` and
+  `singleusetokens` blocks the TTL index: drop it once and restart. See
+  [Deployment](/operations/deployment/#set-up-mongodb-atlas).
+- **Suspension takes up to 10 seconds on other instances.** Each API process
+  caches a school's status for 10 seconds; the instance that handled the
+  suspend or reactivate clears its cache at once, others catch up.
+- **The API ignores `PORT`.** Hosts that inject `PORT` need `API_PORT` set to
+  the same value.
+
+## Related pages
+
+<CardGrid>
+  <LinkCard title="Running locally" description="Start the API, web app and docs." href="/setup/running-locally/" />
+  <LinkCard title="Environment variables" description="Every key and its default." href="/reference/environment-variables/" />
+  <LinkCard title="API endpoints" description="Error codes and the routes that raise them." href="/reference/api-endpoints/#error-codes" />
+  <LinkCard title="Deployment" description="Production hosting and the go-live checklist." href="/operations/deployment/" />
+</CardGrid>

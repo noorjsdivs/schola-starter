@@ -1,0 +1,313 @@
+---
+title: The web app
+description: How apps/web is put together — route groups and layouts, the dashboard shell and role-based sidebar, data fetching with TanStack Query, Zustand stores, forms, tables, theming, SEO files and the in-browser demo school.
+---
+
+import { Aside, Steps, Card, CardGrid, LinkCard, FileTree } from '@astrojs/starlight/components';
+import ScreenAnatomy from '../../../components/ScreenAnatomy.astro';
+import SourceFile from '../../../components/SourceFile.astro';
+import Api from '../../../components/Api.astro';
+import Route from '../../../components/Route.astro';
+import DemoLogin from '../../../components/DemoLogin.astro';
+
+`apps/web` is the part of Schola people actually see: the public marketing
+site, the sign-in screens, the Super Admin's platform console and the school
+app every staff member, student and parent uses. It is a **Next.js 16 App
+Router** project written in React 19. It has **no business logic and no
+database access** — every piece of school data comes from the API through one
+small HTTP client, and every permission it shows or hides is checked again by
+the API.
+
+## At a glance
+
+<CardGrid>
+  <Card title="Framework" icon="laptop">
+    Next.js 16.4 (webpack build), React 19, TypeScript strict, typed routes.
+  </Card>
+  <Card title="UI kit" icon="puzzle">
+    Tailwind CSS 4 + shadcn/ui primitives in `src/components/ui`, lucide icons, Motion.
+  </Card>
+  <Card title="Data" icon="random">
+    TanStack Query for server state; Zustand for session and UI flags.
+  </Card>
+  <Card title="Forms" icon="pencil">
+    React Hook Form + the same Zod schemas the API validates with.
+  </Card>
+</CardGrid>
+
+## Folder map
+
+<FileTree>
+- apps/web/
+  - proxy.ts cookie-presence redirects (see the caution below)
+  - next.config.ts `/api/*` rewrite, transpilePackages, security headers
+  - src/
+    - app/
+      - (marketing)/ public site: `/`, about, academics, admissions, contact, events, faq, features, legal, news, pricing
+      - (auth)/ login, signup, forgot-password, reset-password, verify
+      - (super-admin)/platform/ the platform console
+      - (tenant)/app/ the school app
+      - welcome/ visitor dashboard
+      - onboarding/school/ register a school after signing in
+      - admin-transfer/ accept an admin-role nomination
+      - layout.tsx fonts, providers, default metadata, Organization JSON-LD
+      - globals.css design tokens
+      - sitemap.ts robots.ts manifest.ts opengraph-image.tsx twitter-image.tsx icon.tsx apple-icon.tsx
+    - components/ ui, layout, data, auth, permissions, records, dashboard, platform, marketing, seo, motion
+    - lib/ api-client, permissions, env, seo, form, demo, sample-data, data hooks
+    - providers/ auth, query, sample mode
+    - stores/ session, ui, platform (Zustand)
+    - hooks/
+</FileTree>
+
+## Route groups and layouts
+
+Folders in parentheses are *route groups*: they share a layout but don't
+appear in the URL.
+
+| Group | URLs | Layout | Indexed? |
+|---|---|---|---|
+| `(marketing)` | `/`, `/about`, `/pricing`, `/contact`, `/faq`, `/features`, `/academics`, `/admissions`, `/events`, `/news`, `/legal/privacy`, `/legal/terms` | `SiteHeader` + `SiteFooter` | yes |
+| `(auth)` | `/login`, `/signup`, `/forgot-password`, `/reset-password`, `/verify` | split screen with the form on the left | `noindex` |
+| `(super-admin)` | `/platform/*` | `RequireRole allow={["super_admin"]}` → `PlatformFrame` | `noindex` |
+| `(tenant)` | `/app/*` | `RequireRole` (the 8 tenant roles) → `AppFrame` | `noindex` |
+| — | `/welcome`, `/onboarding/school`, `/admin-transfer` | own pages | — |
+
+The root <SourceFile path="apps/web/src/app/layout.tsx" /> loads the Lexend,
+Merriweather and Ubuntu Mono fonts, sets the default metadata and wraps
+everything in the providers, outermost first:
+
+```tsx title="apps/web/src/app/layout.tsx (body)"
+<ThemeProvider>
+  <QueryProvider>
+    <AuthProvider>
+      {children}
+      <Toaster richColors closeButton position="top-right" />
+    </AuthProvider>
+  </QueryProvider>
+</ThemeProvider>
+<JsonLd json={organizationLd} />
+```
+
+There is **no `app/api` folder**. `/api/*` never reaches a Next.js route
+handler; it is rewritten to the Express API by `next.config.ts`.
+
+## The dashboard shell
+
+Both consoles use one component,
+<SourceFile path="apps/web/src/components/layout/dashboard-shell.tsx" symbol="DashboardShell" />.
+
+<ScreenAnatomy
+  title="School app"
+  path="/app"
+  regions={[
+    { label: 'Sidebar', area: 'sidebar', desc: 'Groups filtered by permission; collapses to icons' },
+    { label: 'Top bar', area: 'top', desc: 'Page title, Load sample, notifications bell, account menu' },
+    { label: 'Demo banner', desc: 'Shown only while the demo school is loaded' },
+    { label: 'Page content', desc: 'Max width 1440px, scrolls on its own', size: 4 },
+  ]}
+/>
+
+- **Sidebar groups** for the school app, in set-up order: Overview, My school,
+  School setup, People, Daily, Attendance, Academics, Facilities, Finance,
+  Administration, Account. The platform console has Overview, Schools,
+  People, Activity, System.
+- **Filtering.** `AppFrame` passes `visibleGroups(APP_GROUPS, user, links)`:
+  each item can require a `permission`, `anyOf` several permissions, or
+  `links` (the caller's own teacher / student / parent / staff record). Empty
+  groups disappear. Details on [Roles & permissions](/architecture/rbac/#how-the-web-app-uses-permissions).
+- **Collapse.** The desktop sidebar toggles between 256px and 64px; the choice
+  is stored in the `ui` Zustand store. Below the `lg` breakpoint a menu
+  button opens it as an off-canvas drawer (Escape or navigating closes it).
+- **Notifications bell** appears in the school app only (`showNotifications`).
+  See [Email and notifications](/architecture/email-and-notifications/).
+
+<DemoLogin as="School Admin" email="admin@greenfield.example" go="/app" />
+
+## Talking to the API
+
+All requests go through <SourceFile path="apps/web/src/lib/api-client.ts" />:
+
+| Export | Does |
+|---|---|
+| `api.get/post/put/patch/delete<T>(path, …)` | Calls `${API_BASE_URL}${path}` (default `/api/v1`) with cookies; adds `x-csrf-token` on writes; returns `data` or throws `ApiError(status, code, message, details)` |
+| `api.getPage<T>(path, query)` | Returns `{ items, page, pageSize, total, totalPages }` from `meta.pagination` |
+| `ensureCsrf()` | Calls <Api method="GET" path="auth/csrf" /> before a write on a page that hasn't loaded the session |
+| (internal) silent refresh | First `401` → one shared <Api method="POST" path="auth/refresh" /> → retry once |
+
+### Server state: TanStack Query
+
+<SourceFile path="apps/web/src/providers/query-provider.tsx" /> creates one
+`QueryClient` with `staleTime: 60_000`, `refetchOnWindowFocus: false`,
+`retry: 1` for queries and no retries for mutations.
+
+Pages use small hooks instead of calling `useQuery` directly:
+
+| Hook | File | For |
+|---|---|---|
+| `usePagedList(key, path, filters, control)` | `components/data/pager.tsx` | a server-paginated table page (20 rows) |
+| `useAcademicYears()`, `useClasses()`, `useSections()`, `useTeachers()` … | `lib/school-data.ts` | option lists (one page of 100) |
+| `useMeSummary()`, `useMyProfile()`, `useMyLinks()` | `lib/me-data.ts` | the signed-in person's own data |
+| `useRecordDrawer()`, `useDeleteRecord()` | `lib/use-records.ts` | add / edit drawer state; confirm → `DELETE` → toast → invalidate |
+
+Query keys start with the resource name (`["students", page, filters, "live"]`),
+so a mutation invalidates by root key, e.g.
+`invalidate: ["students", "sections", "dashboard-summary"]`. Every key ends
+with `"demo"` or `"live"` so demo and real results never mix in the cache.
+
+### Client state: Zustand
+
+| Store | File | Persisted as | Holds |
+|---|---|---|---|
+| Session | `stores/session-store.ts` | `schola.session` | the `user` object only (never tokens); `loading` and `hydrated` reset each load |
+| UI | `stores/ui-store.ts` | `schola.ui` | `sidebarCollapsed` |
+| Platform | `stores/platform-store.ts` | `schola:platform` | the Super Admin's school-status filter and search text |
+
+The original spec splits state this way on purpose: **server data lives only in
+TanStack Query**; Zustand holds only things the server doesn't know.
+
+### URL state for lists
+
+`useListParams(["q", "class", "section"])` in `lib/use-list-params.ts` keeps
+search, filters and `page` in the query string, so a filtered list survives
+reloads, back/forward and can be shared as a link. Changing a filter resets
+to page 1.
+
+## Forms
+
+Forms use React Hook Form with the API's own Zod schema:
+
+```tsx title="apps/web/src/app/(auth)/login/login-form.tsx (abridged)"
+const form = useForm<LoginInput>({
+  resolver: schemaResolver(loginSchema),   // from @schola/validation/auth
+  defaultValues: { email: "", password: "" },
+  mode: "onTouched",
+});
+
+async function onSubmit(values: LoginInput) {
+  try {
+    const data = await api.post<LoginResponse>("/auth/login", values);
+    setUser(data);
+    toast.success(`Welcome back, ${data.firstName}.`);
+    router.replace(data.role === "super_admin" ? "/platform" : data.role === "user" ? "/welcome" : next);
+  } catch (err) { /* map ApiError codes to a message */ }
+}
+```
+
+Helpers in <SourceFile path="apps/web/src/lib/form.ts" />:
+`schemaResolver()` (types the resolver to the form), `blankToUndefined`
+(empty optional inputs become `undefined`), `toDateInput()`, `todayISO()`,
+`errorMessage()`. Success and failure are announced with **sonner** toasts.
+
+## Tables
+
+`SimpleTable` in <SourceFile path="apps/web/src/components/data/simple-table.tsx" />
+is built on TanStack Table with core features only — rows arrive one page at
+a time, so the table does no client-side sorting or paging. Columns are
+`{ key, header, render, hideOnMobile? }`. Below the `sm` breakpoint each row
+becomes a card (first column as title, `actions` top-right). It has loading
+skeletons, an error state with **Retry**, and an empty state.
+
+## Theming
+
+- **Tokens** are OKLCH CSS variables in <SourceFile path="apps/web/src/app/globals.css" />:
+  `:root` for light, `.dark` for dark, mapped to Tailwind with `@theme inline`
+  using shadcn's names (`--primary`, `--card`, `--muted-foreground` …). The
+  brand is cyan primary with a yellow accent; dark mode is navy.
+- **Switching** uses `next-themes` with `attribute="class"`,
+  `defaultTheme="system"` and the `schola-theme` storage key. The header toggle
+  animates the change with a View Transition "wipe", skipped for
+  reduced-motion users.
+- **Fonts** — Lexend (UI), Merriweather (editorial), Ubuntu Mono (codes and
+  IDs), via `next/font/google` CSS variables.
+
+## SEO files
+
+| File | Produces |
+|---|---|
+| `app/layout.tsx` | `metadataBase`, title template `%s · Schola`, Open Graph, Twitter card, robots, icons, manifest, Organization JSON-LD |
+| `lib/seo.ts` → `pageMetadata({ title, description, path, noindex? })` | per-page canonical, OG and Twitter tags |
+| `app/sitemap.ts`, `app/robots.ts` | sitemap; robots disallows `/app/`, `/platform/`, `/api/` and the auth pages |
+| `app/opengraph-image.tsx`, `twitter-image.tsx`, `icon.tsx`, `apple-icon.tsx`, `manifest.ts` | generated images and PWA manifest |
+| `components/seo/json-ld.tsx` | inline `application/ld+json` |
+
+Every `(auth)`, `/app` and `/platform` layout sets `robots: noindex`.
+
+## The demo school ("Load sample")
+
+The top bar of both consoles has a **Load sample** button
+(`SampleDataButton` in `providers/sample-mode.tsx`). It lets someone explore
+a full school without touching real data:
+
+<Steps>
+
+1. Clicking it seeds a fresh in-browser school (`resetDemoDb()` in
+   `lib/demo/server.ts`, data in `lib/demo/db.ts`), flips
+   `setDemoMode(true)` and resets every cached query.
+2. From then on, the API client answers **school-data paths** —
+   `academic-years`, `subjects`, `classes`, `sections`, `teachers`,
+   `students`, `parents`, `staff`, `enrollments`, `attendance`,
+   `staff-attendance`, `exams`, `grades`, `remarks`, `dashboard`,
+   `student-records`, `reports` — from that in-memory school, with the same
+   envelope, the same Zod validation and the same rules as the real API.
+3. Everything else (auth, notifications, finance, platform) still goes to the
+   real API; a few screens swap in static numbers from
+   <SourceFile path="apps/web/src/lib/sample-data.ts" /> (for example the
+   platform dashboard's `SAMPLE_PLATFORM`).
+4. A "Demo school." banner shows while it's on. Clicking **Show real data**,
+   reloading, or leaving the dashboard returns to real data; demo edits vanish.
+
+</Steps>
+
+Sample mode only takes effect on pages the demo school serves end to end
+(`isDemoPage()` in <SourceFile path="apps/web/src/lib/demo/mode.ts" />): the dashboard (`/app`), Academic years, Subjects, Classes & sections, Students, Teachers, Parents, Staff, Student and Staff attendance, Exams, Gradebook, Remarks and Reports — plus the platform dashboard, All schools and Approvals. Every other page —
+fees, payroll, facilities, leave, admissions, a member's own records — mixes
+in routes the demo doesn't model, so it always shows real data. There the
+button is disabled with the tooltip "Sample data isn't available on this
+page.", and if sample mode was switched on elsewhere, an info notice reads
+"Real data on this page." — "The demo school covers school setup, people,
+attendance, and academics. This page shows your school's real records; the
+demo returns on those pages." Navigating between the two kinds of page flips
+the API client and resets the query cache, so a page never mixes demo ids with
+real records. Sample schools on the platform pages have no detail page, so
+their rows are not links and offer no actions.
+
+## Edge cases and gotchas
+
+<Aside type="caution" title="proxy.ts is outside src/">
+Next.js loads the proxy file from the same level as the `app` folder. Here
+`app` lives in `apps/web/src/`, but the file is `apps/web/proxy.ts`, and the dev
+build's `middleware-manifest.json` lists no middleware. Its redirects (signed-out
+visitors away from `/app`, `/platform`, `/onboarding`; signed-in users away from
+`/login` and `/signup`) therefore don't run at the edge. `RequireRole` still
+guards the console layouts client-side, showing a "Checking access" card
+first. `/onboarding/school` checks the session in its form component instead.
+</Aside>
+
+<Aside type="caution" title="No Content-Security-Policy header">
+`next.config.ts` sets `Referrer-Policy`, `X-Content-Type-Options`,
+`X-Frame-Options: DENY` and `Permissions-Policy`, but no
+`Content-Security-Policy`, which the original spec and the deployment checklist ask
+for. See [Security](/architecture/security/).
+</Aside>
+
+- **File links bypass the client.** PDF and CSV downloads are plain
+  `<a href="/api/v1/…pdf">` links. They get no silent refresh: after 15
+  idle minutes the new tab shows a JSON `401` until the page makes any API
+  call (which refreshes the session).
+- **The session store can be briefly stale.** A persisted user is shown
+  immediately and revalidated in the background; a role change appears after
+  `/auth/me` returns.
+- **`NEXT_PUBLIC_*` values are baked in at build time** — rebuild after
+  changing them.
+- **Typed routes.** `typedRoutes: true` makes `href` strings type-checked;
+  dynamic ones are cast `as Route`.
+
+## Related pages
+
+<CardGrid>
+  <LinkCard title="Web routes" description="Every URL in the web app and who can open it." href="/reference/web-routes/" />
+  <LinkCard title="Authentication" description="How the session store and API client keep you signed in." href="/architecture/authentication/" />
+  <LinkCard title="Roles & permissions" description="How the sidebar decides what to show." href="/architecture/rbac/" />
+  <LinkCard title="Public website" description="The marketing pages and their SEO." href="/features/public-website/" />
+</CardGrid>

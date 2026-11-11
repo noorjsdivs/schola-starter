@@ -1,0 +1,67 @@
+---
+title: Schola Documentation
+description: The complete guide to Schola — how to set it up, how it is built, and how every feature works, from the platform console to the parent portal.
+template: splash
+hero:
+  tagline: One platform that runs every part of a school — for every school. This guide explains all of it, in plain language.
+  image:
+    light: ../../assets/schola-mark.svg
+    dark: ../../assets/schola-mark-dark.svg
+    alt: Schola
+  actions:
+    - text: Start reading
+      link: /start-here/introduction/
+      icon: right-arrow
+    - text: Set up the project
+      link: /setup/installation/
+      variant: minimal
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+import Pipeline from '../../components/Pipeline.astro';
+import FeatureGrid from '../../components/FeatureGrid.astro';
+
+## The life of a school on Schola
+
+<Pipeline
+  caption="Each stage is a page in the Tutorial — follow them in order to build a school from nothing."
+  steps={[
+    { label: 'Sign up', icon: 'user-plus', note: 'The owner registers the school' },
+    { label: 'Approve', icon: 'badge-check', note: 'The Super Admin reviews it' },
+    { label: 'Set up', icon: 'layers', note: 'Years, classes, subjects' },
+    { label: 'Add people', icon: 'users', note: 'Teachers, students, parents' },
+    { label: 'Run the day', icon: 'calendar-check', note: 'Attendance and timetable' },
+    { label: 'Assess', icon: 'award', note: 'Exams, grades, report cards' },
+    { label: 'Collect', icon: 'wallet', note: 'Fees, payments and payroll' },
+  ]}
+/>
+
+## Everything Schola does
+
+<FeatureGrid
+  items={[
+    { title: 'Platform console', desc: 'Approve, suspend and audit every school on the platform.', href: '/features/platform/dashboard/', icon: 'shield', tone: 'indigo' },
+    { title: 'School dashboard', desc: 'Live attendance, fee collection and quick actions per role.', href: '/features/school/dashboard/', icon: 'dashboard' },
+    { title: 'Academics', desc: 'Academic years, classes, sections and subjects.', href: '/features/academics/classes-and-sections/', icon: 'layers' },
+    { title: 'People', desc: 'Students, parents, teachers and staff, with encrypted personal data.', href: '/features/people/students/', icon: 'users' },
+    { title: 'Attendance', desc: 'Daily registers for every section and every staff member.', href: '/features/daily/attendance/', icon: 'calendar-check' },
+    { title: 'Timetable & leave', desc: 'Clash-free weekly timetables and leave approvals.', href: '/features/daily/timetable/', icon: 'calendar-range' },
+    { title: 'Exams & gradebook', desc: 'Exams, marks, letter grades and PDF report cards.', href: '/features/assessment/gradebook/', icon: 'award', tone: 'yellow' },
+    { title: 'Fees & payments', desc: 'Fee structures, invoices, receipts and Stripe checkout.', href: '/features/finance/fees/', icon: 'wallet', tone: 'yellow' },
+    { title: 'Payroll', desc: 'Salary structures, monthly payslips and payments.', href: '/features/finance/payroll/', icon: 'banknote', tone: 'yellow' },
+    { title: 'Campus services', desc: 'Admissions, library, transport and hostel.', href: '/features/campus/admissions/', icon: 'building' },
+    { title: 'Portals', desc: 'What teachers, students, parents and staff see.', href: '/features/portals/parent/', icon: 'users-round', tone: 'indigo' },
+    { title: 'Reports & audit', desc: 'Reports, exports and a complete audit trail.', href: '/features/insight/reports/', icon: 'chart', tone: 'indigo' },
+  ]}
+/>
+
+## Where to go next
+
+<CardGrid>
+  <LinkCard title="New here?" description="What Schola is, who uses it, and the words you will keep seeing." href="/start-here/introduction/" />
+  <LinkCard title="Developer setup" description="Install, configure every service and run the platform with demo data." href="/setup/installation/" />
+  <LinkCard title="Build a school from scratch" description="A step-by-step tutorial — ideal for a walkthrough video." href="/tutorial/overview/" />
+  <LinkCard title="How it's built" description="Multi-tenancy, auth, permissions, audit log and the request lifecycle." href="/architecture/overview/" />
+  <LinkCard title="Every feature" description="Screen-by-screen guides for each module and each role." href="/features/overview/" />
+  <LinkCard title="Reference" description="All routes, API endpoints, permissions, env vars and statuses." href="/reference/web-routes/" />
+</CardGrid>

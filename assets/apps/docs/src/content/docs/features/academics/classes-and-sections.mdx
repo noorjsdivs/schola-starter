@@ -1,0 +1,319 @@
+---
+title: Classes and sections
+description: Create classes inside an academic year, give each a class teacher and its subjects, add sections with a capacity and a section teacher, and enrol, move or withdraw students.
+---
+
+import { Aside, Steps, Tabs, TabItem, Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+import Pipeline from '../../../../components/Pipeline.astro';
+import ScreenAnatomy from '../../../../components/ScreenAnatomy.astro';
+import SourceFile from '../../../../components/SourceFile.astro';
+import Api from '../../../../components/Api.astro';
+import Perm from '../../../../components/Perm.astro';
+import Roles from '../../../../components/Roles.astro';
+import Route from '../../../../components/Route.astro';
+import DemoLogin from '../../../../components/DemoLogin.astro';
+import Screenshot from '../../../../components/Screenshot.astro';
+import { Tabs as ShotTabs, TabItem as ShotTab } from '@astrojs/starlight/components';
+
+A **class** is a grade or level in one academic year — "Grade 3" in
+2026-2027. A [section](/start-here/glossary/#section) is a group of students
+inside a class — "Grade 3 · A" — and it is the unit the school actually runs:
+attendance is taken per section, marks are entered per section, and each
+student is **enrolled** in exactly one section per year. The Classes pages are
+where the school builds that structure and fills it with students.
+
+## At a glance
+
+<CardGrid>
+  <Card title="Who uses it" icon="star">
+    <Roles list={['school_admin', 'principal']} note="manage" /> <Roles list={['vice_principal', 'teacher', 'accountant']} note="view" />
+  </Card>
+  <Card title="Where to find it" icon="laptop">
+    <Route path="/app/classes" /> <Route path="/app/classes/[id]" label="Class detail" /> — sidebar **School setup → Classes & sections**
+  </Card>
+  <Card title="Permissions" icon="approve-check">
+    <Perm name="class:read" /> <Perm name="class:create" /> <Perm name="class:update" /> <Perm name="class:delete" /> <Perm name="section:create" /> <Perm name="section:update" /> <Perm name="section:delete" />; enrolling needs <Perm name="student:create" />, moving and withdrawing <Perm name="student:update" />.
+  </Card>
+</CardGrid>
+
+<DemoLogin as="School Admin" email="admin@greenfield.example" go="/app/classes">
+Greenfield has Grade 1 to Grade 10 in the current year, each with sections A
+and B (30 seats each, 25 students enrolled), a class teacher and the subjects
+taught at that level.
+</DemoLogin>
+
+## How it works
+
+<Pipeline
+  caption="Building a school's structure, in the order the pages expect."
+  steps={[
+    { label: 'Year', icon: 'calendar-range', note: 'Academic years page' },
+    { label: 'Class', icon: 'layers', note: 'Grade 3, in that year' },
+    { label: 'Sections', icon: 'clipboard-list', note: 'A and B, with capacity' },
+    { label: 'Teachers', icon: 'user-check', note: 'Class teacher, section teacher' },
+    { label: 'Enrol', icon: 'user-plus', note: 'Students into a section' },
+  ]}
+/>
+
+Two kinds of teacher assignment decide what a teacher "owns":
+
+| Assignment | Set on | Gives the teacher |
+|---|---|---|
+| **Class teacher** (homeroom) | the class | Every section of that class — attendance for all of them |
+| **Section teacher** | one section | That section — attendance and grade entry |
+
+Together they make the teacher's **own sections**, which drive "My classes",
+"Teaching today" on their dashboard and their attendance scope.
+
+An **enrolment** ties a student to a section for one academic year, with an
+optional roll number that orders the register. Its status is `active` until
+the student is withdrawn.
+
+## The screens
+
+Real screenshots from the seeded demo school (switch the docs theme to see dark mode):
+
+<ShotTabs>
+  <ShotTab label="Classes & sections">
+    <Screenshot name="admin-classes" alt="Classes and their sections" path="/app/classes" />
+  </ShotTab>
+  <ShotTab label="Class detail">
+    <Screenshot name="admin-class-detail" alt="One class with its sections and enrolled students" path="/app/classes/6aeeea6fe8e90dae8c0644da" />
+  </ShotTab>
+</ShotTabs>
+
+
+<ScreenAnatomy
+  title="Classes & sections"
+  path="/app/classes"
+  regions={[
+    { label: 'Sidebar', desc: '"Classes & sections" highlighted under School setup.', area: 'sidebar' },
+    { label: 'Page header', desc: '"Classes & sections" — "Each class belongs to one academic year. Open a class to add its sections and enroll students." — and "Add class" (disabled until an academic year exists, with a yellow notice linking to Academic years).' },
+    { label: 'Year filter', desc: '"All academic years" or one year; the current one is labelled "(current)".', tone: 'muted' },
+    { label: 'Classes table', desc: 'Class (a link, with its description), Year, Class teacher (or "Unassigned"), Sections, Students, and a "⋯" menu: Open sections, Edit, Delete. 20 per page.', size: 4, tone: 'accent' },
+  ]}
+/>
+
+<ScreenAnatomy
+  title="Class detail"
+  path="/app/classes/[id]"
+  regions={[
+    { label: 'Page header', desc: 'The class name, "2026-2027 · Class teacher: Grace Mensah", and the buttons "Classes" (back), "Edit class" and "Add section".' },
+    { label: 'Stat tiles', desc: 'Sections, Students (enrolled in all sections) and Seats (total capacity, or a dash when unlimited).', tone: 'muted' },
+    { label: 'Sections card', desc: '"Sections — Pick a section to see and manage its students." Section (a button, e.g. "Section A"), Section teacher, Students (a seat meter like 25/30, red when full) and "⋯": View students, Edit, Delete.', size: 2, tone: 'accent' },
+    { label: 'Roster card', desc: '"Section A — students" with the section teacher, a seat meter and "Enroll students"; then Student (name and admission number), Roll no., Gender and "⋯": Move or set roll no., Withdraw from section.', size: 3, tone: 'accent' },
+  ]}
+/>
+
+## Step by step
+
+<Tabs>
+<TabItem label="Create a class">
+
+<Steps>
+
+1. Click **School setup → Classes & sections**, then **Add class**.
+2. In the "New class" drawer ("A class belongs to one academic year. Sections
+   are added inside it."), **Academic year** is already set to the current
+   year.
+3. Type **Name** `Grade 11` and an optional **Description**.
+4. Pick a **Class teacher (optional)** — the list shows "Name (TCH-001)". The
+   hint reads "The homeroom teacher. They can take attendance for every
+   section of this class." Leave it on "No class teacher" if nobody leads the
+   class yet; you can set one later with **Edit**.
+5. Tick the **Subjects taught** (use "Filter subjects" to find them).
+6. Click **Create class**. A toast says "Class created." and the class
+   appears in the table with 0 sections.
+
+</Steps>
+
+</TabItem>
+<TabItem label="Add sections">
+
+<Steps>
+
+1. Click the class name (or **⋯ → Open sections**). The detail page shows
+   "No sections yet — Add at least one section (for example "A") before
+   enrolling students."
+2. Click **Add section**. In the drawer, type **Name** `A`, keep **Capacity**
+   `40` ("0 means no limit.") and, if you like, pick a **Section teacher
+   (optional)** ("They can take attendance and enter grades for this
+   section."). "No section teacher" is fine.
+3. Click **Create section**. A toast says "Section created." Repeat for `B`.
+4. Click **Section A** in the table to select it. The roster card below
+   reads "Section A — students".
+
+</Steps>
+
+</TabItem>
+<TabItem label="Enrol students">
+
+<Steps>
+
+1. With a section selected, click **Enroll students**. The drawer is titled
+   "Enroll into Grade 11 · A" and says how many seats are left.
+2. Search with **Search name or admission no.** Only students **without a
+   class this year** are listed; a student from last year shows "· was in
+   *class*".
+3. Tick the students. If you tick more than the seats left, a red line says
+   "Only N seats left in Grade 11 · A." and the button is disabled.
+4. Click **Enroll N students**. Students are enrolled one at a time; a toast
+   says "Enrolled N students in Grade 11 · A." Any that fail are reported in
+   a red toast with the first reason.
+5. The roster now lists them, sorted by roll number then last name.
+
+</Steps>
+
+</TabItem>
+<TabItem label="Move or withdraw">
+
+<Steps>
+
+1. Open **Grade 3**, select **Section A**, and open **⋯** on a student.
+2. Choose **Move or set roll no.** The drawer "Move *name*" ("Change the
+   section or roll number for this academic year.") offers every section of
+   this year with its seat count; full sections are disabled and marked
+   "— full".
+3. Pick **Grade 3 · B** or change the **Roll number** and click **Save**. A
+   toast says "Enrollment updated."
+4. Or choose **Withdraw from section**. The dialog asks "Withdraw *name*?" —
+   "They leave this section's roster and attendance register. Their student
+   record and past attendance stay." Click **Withdraw**; a toast says "*Name*
+   was removed from A."
+
+</Steps>
+
+</TabItem>
+</Tabs>
+
+## Every action on this screen
+
+### Loading classes
+
+<Api method="GET" path="classes" perm="class:read" /> <Api method="GET" path="classes/:id" perm="class:read" />
+
+Query `academicYearId` filters by year. Each class comes back with its year,
+class teacher, section count and student count. Sorted by name.
+
+### "Add class" / "Edit class" / "Edit"
+
+<Api method="POST" path="classes" perm="class:create" /> <Api method="PATCH" path="classes/:id" perm="class:update" />
+
+| Field | Rule |
+|---|---|
+| Academic year | required; must belong to the school ("Academic year not found.") |
+| Name | 1–60 characters; unique within the year ("Another record already uses this name.") |
+| Description | optional, up to 500 characters |
+| Class teacher | optional — "No class teacher" creates the class without one; a teacher of this school ("Teacher not found in this school."); choosing "No class teacher" when editing clears it |
+| Subjects taught | any subjects of this school ("Subject not found.") |
+
+Audit actions `class.create` and `class.update`. The API also offers a
+dedicated endpoint to set only the class teacher (audit `class.assign_teacher`);
+the page sets the teacher through the edit form instead.
+
+<Api method="POST" path="classes/:id/assign-teacher" perm="class:assign_teacher" />
+
+### "Delete" (class)
+
+<Api method="DELETE" path="classes/:id" perm="class:delete" />
+
+The dialog warns "Only classes without sections can be deleted. Delete its
+sections first." The API refuses with "This class still has 2 sections.
+Delete them first." Otherwise the class is soft-deleted (`class.delete`).
+
+### Sections: load, "Add section", "Edit", "Delete"
+
+<Api method="GET" path="sections" perm="section:read" /> <Api method="POST" path="sections" perm="section:create" /> <Api method="PATCH" path="sections/:id" perm="section:update" /> <Api method="DELETE" path="sections/:id" perm="section:delete" />
+
+Name 1–20 characters, unique within the class; capacity a whole number
+0–1000 (default 40, 0 = no limit); section teacher optional. Delete is refused
+while students are enrolled: "25 students are enrolled in this section. Move
+or withdraw them first." Audit actions `section.create`, `section.update`,
+`section.delete`.
+
+### The roster
+
+<Api method="GET" path="students" perm="student:read" />
+
+Called with `sectionId` and `pageSize=100`. Each student carries their
+current enrolment (section, roll number).
+
+### "Enroll students"
+
+<Api method="POST" path="enrollments" perm="student:create" />
+
+One request per ticked student, in sequence, so the capacity check is exact.
+The API refuses when the section belongs to another year ("That section
+belongs to a class in a different academic year."), when the student already
+has an **active** enrolment that year ("Student is already enrolled for this
+academic year.") or when the section is full ("Section A is full (30/30).
+Raise its capacity or pick another section."; capacity `0` never fills).
+Audit action `enrollment.create`.
+
+A student who was withdrawn (or transferred) earlier in the same year
+reappears in the picker and can be enrolled again: the API reopens their
+existing enrolment in the chosen section, with a new roll number and
+`enrolledAt`, and writes `enrollment.reactivate` with the before and after.
+
+### "Move or set roll no." and "Withdraw from section"
+
+<Api method="PATCH" path="enrollments/:id" perm="student:update" />
+
+Move sends the new `sectionId` and/or `rollNumber` (the target must be in the
+same year and have a free seat). Withdraw sends `{ "status": "withdrawn" }`,
+which also stamps the end date. Audit action `enrollment.update`.
+
+## Who sees what
+
+| Role | Classes list and detail | Add / edit class and sections | Delete class or section | Enrol | Move, withdraw |
+|---|---|---|---|---|---|
+| School Admin | Yes | Yes | Yes | Yes | Yes |
+| Principal | Yes | Yes | — | Yes | Yes |
+| Vice Principal | Yes (read only) | — | — | — | — |
+| Teacher | Yes (read only, every class) | — | — | — | — |
+| Accountant | Yes (read only — Fees needs the class and section lists) | — | — | — | — |
+| Student, Parent, Staff | — | — | — | — | — |
+
+## Under the hood
+
+- <SourceFile path="apps/web/src/app/(tenant)/app/classes/page.tsx" /> — the list.
+- <SourceFile path="apps/web/src/app/(tenant)/app/classes/[id]/page.tsx" /> — the detail page, roster, `MoveStudentForm` and the withdraw dialog.
+- <SourceFile path="apps/web/src/components/school/class-form.tsx" symbol="ClassForm" />, <SourceFile path="apps/web/src/components/school/section-form.tsx" symbol="SectionForm" />, <SourceFile path="apps/web/src/components/school/enroll-students.tsx" symbol="EnrollStudents" />.
+- <SourceFile path="apps/api/src/modules/academics/classes.routes.ts" /> and <SourceFile path="apps/api/src/modules/academics/sections.routes.ts" />.
+- <SourceFile path="apps/api/src/modules/people/enrollments.routes.ts" /> — `assertSectionInYear`, `assertSeatAvailable`.
+- <SourceFile path="apps/api/src/modules/academics/_enrich.ts" /> — section and student counts, `currentEnrollments`.
+- <SourceFile path="apps/api/src/services/scopes/teacher-scope.ts" symbol="resolveOwnSectionIds" /> — class teacher plus section teacher.
+- <SourceFile path="packages/validation/src/academics.ts" /> — class and section schemas.
+- <SourceFile path="packages/db/src/models/class.ts" />, <SourceFile path="packages/db/src/models/section.ts" />, <SourceFile path="packages/db/src/models/enrollment.ts" />.
+
+## Edge cases and gotchas
+
+- **Names sort as text.** The list is sorted alphabetically, so Greenfield
+  shows Grade 1, Grade 10, Grade 2, … Grade 9.
+- **The enrol picker sees 100 students at a time.** It loads the first 100
+  matches of your search and hides those already placed this year. In a large
+  school, search for the student instead of scrolling.
+- **The roster shows up to 100 students per section.**
+- **Changing a class's year does not move its enrolments.** Enrolments keep
+  the year they were made in.
+- **A deleted name stays taken.** Like years and subjects, a deleted class or
+  section still blocks its name in the same year or class ("Another record
+  already uses this name.").
+- **Teachers see every class.** Read access is school-wide; their *own*
+  sections only matter for attendance and grade entry.
+- **The empty teacher pickers.** "No class teacher" / "No section teacher" is
+  an empty value in the form; the drawers turn it into "no teacher" before the
+  shared schema checks it (`setValueAs: blankToUndefined`), and on **Edit**
+  into `null`, which clears the teacher. Any problem with a picker shows as a
+  red message under it. (Before this release the empty picker failed the ID
+  check without a message, so **Create class** and **Create section** did
+  nothing unless a teacher was picked.)
+
+## Related pages
+
+<CardGrid>
+  <LinkCard title="Academic years" description="Every class belongs to one year." href="/features/academics/academic-years/" />
+  <LinkCard title="Subjects" description="The list behind 'Subjects taught'." href="/features/academics/subjects/" />
+  <LinkCard title="Students" description="Add students before enrolling them." href="/features/people/students/" />
+  <LinkCard title="Attendance" description="Registers run per section." href="/features/daily/attendance/" />
+</CardGrid>

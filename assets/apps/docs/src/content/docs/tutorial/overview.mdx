@@ -1,0 +1,167 @@
+---
+title: Overview
+description: Build a brand-new school called Sunrise Academy on Schola from nothing — what you will make, the order, how long each chapter takes, what to have ready, and a checklist for recording the walkthrough video.
+---
+
+import { Aside, Steps, Card, CardGrid, LinkCard, Badge } from '@astrojs/starlight/components';
+import Pipeline from '../../../components/Pipeline.astro';
+import Roles from '../../../components/Roles.astro';
+import Route from '../../../components/Route.astro';
+import DemoLogin from '../../../components/DemoLogin.astro';
+
+This tutorial builds a real school on Schola, start to finish, using only the
+web app. You play every part: the platform owner who approves schools, the
+school owner who sets it up, the teacher, the accountant and the family. By the
+end, **Sunrise Academy** has a timetable, a register, marks and a report card,
+fees with receipts, and a month of payroll — and you have seen every portal.
+
+Every chapter was performed for real against a running copy of Schola, and
+the screenshots are from that run. The pages double as the script for the
+walkthrough video "How to set up a school on Schola from scratch".
+
+## What you will build
+
+<CardGrid>
+  <Card title="One school" icon="star">
+    **Sunrise Academy**, a K-12 school, applied for on the sign-up page and
+    approved by the Super Admin.
+  </Card>
+  <Card title="One class, two sections" icon="list-format">
+    Academic year **2026-2027**, subjects Mathematics, English and Science,
+    class **Grade 1** with sections **A** and **B** (30 seats each).
+  </Card>
+  <Card title="Nine people" icon="open-book">
+    Owner Laila Rahman, teacher Omar Farouk, office manager Priya Das,
+    accountant Ethan Brooks, parent Sara Khan, and students Aisha Khan, Leo
+    Martins, Mia Chen and Noah Patel.
+  </Card>
+  <Card title="A working term" icon="rocket">
+    A timetable, today's register, a remark, a leave request, an exam with
+    marks, fee invoices and receipts, and November's payslips.
+  </Card>
+</CardGrid>
+
+## The chapters
+
+<Pipeline
+  caption="Follow the chapters in order. Each one builds on the records the one before it created."
+  steps={[
+    { label: 'Platform owner', icon: 'shield', note: 'Super Admin access' },
+    { label: 'Register', icon: 'user-plus', note: 'Apply for the school' },
+    { label: 'Approve', icon: 'badge-check', note: 'Super Admin says yes' },
+    { label: 'Academics', icon: 'layers', note: 'Year, subjects, classes' },
+    { label: 'People', icon: 'users', note: 'Staff, students, parents' },
+    { label: 'School day', icon: 'calendar-check', note: 'Timetable, registers' },
+    { label: 'Exams', icon: 'award', note: 'Marks and report cards' },
+    { label: 'Money', icon: 'wallet', note: 'Fees and payroll' },
+    { label: 'Portals', icon: 'users-round', note: 'What each role sees' },
+  ]}
+/>
+
+| # | Chapter | You sign in as | Time |
+|---|---|---|---|
+| 1 | [Become the platform owner](/tutorial/platform-owner/) | Super Admin | 3 min |
+| 2 | [Register a school](/tutorial/register-a-school/) | nobody (public sign-up) | 4 min |
+| 3 | [Approve the school](/tutorial/approve-the-school/) | Super Admin, then the owner | 3 min |
+| 4 | [Set up academics](/tutorial/set-up-academics/) | School Admin (owner) | 8 min |
+| 5 | [Add people](/tutorial/add-people/) | School Admin | 10 min |
+| 6 | [Run a school day](/tutorial/run-a-school-day/) | School Admin, teacher, parent | 10 min |
+| 7 | [Exams and report cards](/tutorial/exams-and-report-cards/) | School Admin, teacher | 6 min |
+| 8 | [Fees and payments](/tutorial/fees-and-payments/) | Accountant, parent | 8 min |
+| 9 | [Payroll](/tutorial/payroll/) | Accountant | 5 min |
+| 10 | [Tour the portals](/tutorial/portals-tour/) | Teacher, student, parent, staff | 6 min |
+| 11 | [Reports, audit and clean-up](/tutorial/reports-and-audit/) | School Admin, Super Admin | 5 min |
+
+The whole run takes about **70 minutes** of screen time. Each chapter ends
+with a "Check your work" list, so you can stop after any chapter and pick up
+later.
+
+## Before you start
+
+<Steps>
+
+1. **Run the stack.** Follow [Installation](/setup/installation/) and
+   [Running locally](/setup/running-locally/), then start everything with
+   `pnpm dev`. The web app is at `http://localhost:3000` and the API at
+   `http://localhost:8000/api/v1`.
+
+2. **Load the demo data once.** Run `pnpm seed`. You need it for one account:
+   the Super Admin `superadmin@schola.example` (password `Schola@2026`). It
+   also gives you the demo school Greenfield International School, which the
+   portals chapter borrows one student sign-in from.
+
+3. **Check email.** With `RESEND_API_KEY` and `SMTP_HOST` both empty, the API
+   uses the console transport: every email (verification codes, set-password
+   links) is printed to the API log instead of being sent. That is the easiest
+   setup for this tutorial. See [Email](/setup/services/email/).
+
+4. **Optional — Stripe.** For the online payment in the fees chapter, set the
+   Stripe test keys and let `pnpm dev` run `stripe listen`. See
+   [Stripe](/setup/services/stripe/). Everything else works without it.
+
+</Steps>
+
+<Aside type="note" title="Real email providers and *.example addresses">
+Every account in this tutorial uses the reserved domain `sunrise.example`, so
+no real inbox is ever written to. When a real provider is configured (for
+example a Resend key), sending to those addresses fails. Schola treats every
+email that follows a saved change as best-effort: sign-up, approval, adding a
+teacher, staff member or parent, and **Forgot?** all finish normally, and the
+API log records that the email was not delivered. You then won't receive the
+links — [chapter 5](/tutorial/add-people/) shows how to set a password without
+them. With the console transport, every link is in the API log instead.
+</Aside>
+
+### The accounts you will create
+
+Every account uses the password **`Schola@2026`**.
+
+| Who | Email | Role | Created in |
+|---|---|---|---|
+| Laila Rahman | `owner@sunrise.example` | School Admin (owner) | [Register a school](/tutorial/register-a-school/) |
+| Omar Farouk | `teacher@sunrise.example` | Teacher | [Set up academics](/tutorial/set-up-academics/) |
+| Priya Das | `staff@sunrise.example` | Staff (Office Manager) | [Add people](/tutorial/add-people/) |
+| Ethan Brooks | `accountant@sunrise.example` | Staff + Accountant | [Add people](/tutorial/add-people/) |
+| Sara Khan | `parent@sunrise.example` | Parent of Aisha Khan | [Add people](/tutorial/add-people/) |
+
+<DemoLogin as="Super Admin" email="superadmin@schola.example" go="/platform" />
+
+## Recording checklist
+
+<CardGrid>
+  <Card title="Browser" icon="laptop">
+    Window size **1440 × 900**, zoom 100%. The screenshots in this tutorial
+    use exactly that size.
+  </Card>
+  <Card title="Theme" icon="setting">
+    Record in **light** mode (sun/moon button in the top bar). Optionally show
+    the dark theme once, in the portals chapter.
+  </Card>
+  <Card title="Browser profiles" icon="puzzle">
+    Use one profile per person so you never sign out mid-scene: **Platform**
+    (Super Admin), **Owner** (Laila), **Teacher** (Omar), **Accountant**
+    (Ethan), **Family** (Sara), and a spare one for Priya and the demo student.
+  </Card>
+  <Card title="Before each take" icon="approve-check">
+    Close toasts, collapse nothing, and start each chapter on the page its
+    first step names. Keep the API log visible in a second window if you use
+    the console email transport.
+  </Card>
+</CardGrid>
+
+<Aside type="tip" title="Names and dates">
+The run behind these pages happened on Saturday, 7 November 2026. Use the same
+names and values so your video matches the screenshots; dates such as "today"
+will be your own day. If you record on a weekend, attendance still works — the
+register simply records that date.
+</Aside>
+
+## Who does what
+
+<Roles list={['super_admin']} note="approves the school (chapters 1 and 3, and the platform audit log)" />
+<Roles list={['school_admin']} note="sets up and runs the school (chapters 4 to 7 and 11)" />
+<Roles list={['teacher', 'accountant', 'parent', 'staff', 'student']} note="use their own portals (chapters 6 to 10)" />
+
+## Next
+
+<LinkCard title="1. Become the platform owner" description="Get the Super Admin account that approves new schools." href="/tutorial/platform-owner/" />

@@ -1,0 +1,212 @@
+---
+title: Introduction
+description: What Schola is, who it is for, what it does, what it is built with, and how this guide is organised.
+---
+
+import { Aside, Card, CardGrid, LinkCard, Steps, Badge } from '@astrojs/starlight/components';
+import Pipeline from '../../../components/Pipeline.astro';
+import FeatureGrid from '../../../components/FeatureGrid.astro';
+import Roles from '../../../components/Roles.astro';
+import Route from '../../../components/Route.astro';
+import DemoLogin from '../../../components/DemoLogin.astro';
+import SourceFile from '../../../components/SourceFile.astro';
+
+**Schola** is one web platform that runs the day-to-day work of a school. A
+school signs up, the platform owner approves it, and from then on its staff,
+students and parents do everything in one place: classes and timetables,
+attendance, exams and report cards, fees and payroll, the library, transport
+and the hostel. Many schools share the same Schola installation, but each one
+only ever sees its own data. That is what "multi-tenant" means: every school is
+a separate [tenant](/start-here/glossary/#tenant).
+
+Schola's tagline is *School operations, beautifully simple.* The production
+site lives at `https://schola.reactbd.com`.
+
+## Who it is for
+
+Schola has two layers of people. The **platform** layer is the company that
+runs Schola. The **school** layer is everyone inside one school.
+
+<CardGrid>
+  <Card title="The platform owner" icon="star">
+    The <Roles list={['super_admin']} /> reviews new school applications,
+    approves or rejects them, suspends schools, manages platform users and
+    settings, and can read every school's audit log. Works in the platform
+    console at <Route path="/platform" />.
+  </Card>
+  <Card title="People who run a school" icon="setting">
+    <Roles list={['school_admin', 'principal', 'vice_principal', 'accountant']} />
+    set the school up, add people, follow attendance and grades, and handle
+    money. They see the whole-school dashboard at <Route path="/app" />.
+  </Card>
+  <Card title="Teachers and staff" icon="pencil">
+    <Roles list={['teacher', 'staff']} /> take registers, enter marks and
+    remarks, request leave, and read their own attendance and payslips.
+  </Card>
+  <Card title="Families" icon="open-book">
+    <Roles list={['student', 'parent']} /> read their own (or their
+    children's) attendance, grades, report cards, fees and timetable, and can
+    pay invoices online.
+  </Card>
+</CardGrid>
+
+A person can also create a plain account before any school knows them. Until a
+school adds them, they are a [visitor](/start-here/glossary/#visitor) and land
+on <Route path="/welcome" />, where they can apply to bring their own school
+onto Schola. [Roles at a glance](/start-here/roles-at-a-glance/) covers every
+role in detail.
+
+## The life of a school on Schola
+
+<Pipeline
+  caption="Every school follows the same path. Each stage has its own page in the Tutorial."
+  steps={[
+    { label: 'Apply', icon: 'user-plus', note: 'The owner signs up the school' },
+    { label: 'Approve', icon: 'badge-check', note: 'The Super Admin reviews it' },
+    { label: 'Set up', icon: 'layers', note: 'Years, subjects, classes' },
+    { label: 'Add people', icon: 'users', note: 'Teachers, students, parents' },
+    { label: 'Run the day', icon: 'calendar-check', note: 'Registers and timetable' },
+    { label: 'Assess', icon: 'award', note: 'Exams, grades, report cards' },
+    { label: 'Collect and pay', icon: 'wallet', note: 'Fees and payroll' },
+  ]}
+/>
+
+1. The school's owner fills in the "Bring a school" form on <Route path="/signup" />.
+   The school is created with the status `pending_approval`.
+2. The Super Admin opens <Route path="/platform/approvals" /> and approves it.
+   The school becomes `active` and the owner becomes its School Admin.
+3. The School Admin creates an academic year, subjects, classes and sections,
+   then adds teachers, students, parents and staff.
+4. From then on, the school runs on Schola every day.
+
+[How Schola works](/start-here/how-schola-works/) explains this lifecycle,
+including rejection and suspension.
+
+## The product tour
+
+Everything below is a working module in the current code. Each tile opens the
+feature's full guide.
+
+<FeatureGrid
+  items={[
+    { title: 'Platform console', desc: 'Approve, reject, suspend and reactivate schools; manage platform users, settings and the platform-wide audit log.', href: '/features/platform/dashboard/', icon: 'shield', tone: 'indigo' },
+    { title: 'Accounts', desc: 'Sign up, email verification, password reset, and Google or Facebook sign-in.', href: '/features/accounts/sign-up-and-sign-in/', icon: 'log-in', tone: 'indigo' },
+    { title: 'School dashboard', desc: 'Live counts, today\'s attendance, fees collected and quick actions — or a personal dashboard for teachers, students, parents and staff.', href: '/features/school/dashboard/', icon: 'dashboard' },
+    { title: 'Academics', desc: 'Academic years, subjects, classes and sections with class teachers.', href: '/features/academics/classes-and-sections/', icon: 'layers' },
+    { title: 'People', desc: 'Students, parents, teachers and staff. Phone, birthday and address are encrypted at rest.', href: '/features/people/students/', icon: 'users' },
+    { title: 'Attendance', desc: 'A daily register per section, plus staff attendance.', href: '/features/daily/attendance/', icon: 'calendar-check' },
+    { title: 'Timetable & leave', desc: 'Clash-free weekly timetables and leave requests that mark days as excused.', href: '/features/daily/timetable/', icon: 'calendar-range' },
+    { title: 'Remarks', desc: 'Teacher remarks with private, parent or public visibility.', href: '/features/daily/remarks/', icon: 'message' },
+    { title: 'Exams & gradebook', desc: 'Exams, marks, letter grades and a PDF report card.', href: '/features/assessment/gradebook/', icon: 'award', tone: 'yellow' },
+    { title: 'Fees & payments', desc: 'Fee structures, invoices, payments, waivers, PDF receipts and Stripe Checkout.', href: '/features/finance/fees/', icon: 'receipt', tone: 'yellow' },
+    { title: 'Payroll', desc: 'Salary structures, monthly payslips (PDF) and salary payments.', href: '/features/finance/payroll/', icon: 'banknote', tone: 'yellow' },
+    { title: 'Campus services', desc: 'Admissions pipeline, library desk, bus routes and hostel rooms.', href: '/features/campus/admissions/', icon: 'building' },
+    { title: 'Announcements', desc: 'Send in-app notifications to people in the school.', href: '/features/communication/announcements/', icon: 'megaphone' },
+    { title: 'Reports & audit log', desc: 'A reports overview, CSV exports for fees, attendance and payroll, and an append-only audit trail.', href: '/features/insight/reports/', icon: 'chart', tone: 'indigo' },
+    { title: 'Portals', desc: 'What a teacher, student, parent or staff member sees about themselves.', href: '/features/portals/parent/', icon: 'users-round', tone: 'indigo' },
+    { title: 'Public website', desc: 'Marketing pages, pricing, FAQ and contact — with full SEO.', href: '/features/public-website/', icon: 'house' },
+  ]}
+/>
+
+## Try it in five minutes
+
+The quickest way to understand Schola is to load the demo school and click
+around. One command creates **Greenfield International School** with 500
+students and a sign-in for every role (see [Demo data](/setup/demo-data/)).
+
+<Steps>
+
+1. Install and configure the project — [Installation](/setup/installation/).
+
+2. Load the demo platform:
+
+   ```sh
+   pnpm seed
+   ```
+
+3. Start the web app and the API:
+
+   ```sh
+   pnpm dev
+   ```
+
+4. Open `http://localhost:3000/login` and sign in with a demo account.
+
+</Steps>
+
+<DemoLogin as="School Admin" email="admin@greenfield.example" go="/app">
+  Every demo account uses the same password. Try the Super Admin
+  (`superadmin@schola.example`) next to see the platform console.
+</DemoLogin>
+
+<Aside type="tip" title="No database at hand?">
+Inside the school app, the "Load sample" button in the top bar swaps the page's
+data for an in-browser demo school. It never touches the database, so it is
+safe to press during a live demo. Press "Show real data" to switch back.
+</Aside>
+
+## What it is built with
+
+Schola is a TypeScript monorepo managed with pnpm workspaces and Turborepo. The
+browser talks to a Next.js web app, which forwards every `/api/*` request to a
+separate Express API backed by MongoDB.
+
+| Layer | Technology | Version in the repo |
+|---|---|---|
+| Web app (`apps/web`) | Next.js App Router, React | Next `16.4.3`, React `19.3.1` |
+| Styling and UI | Tailwind CSS v4, shadcn/ui (New York style), lucide-react, Motion | Tailwind `^4.3` |
+| Client state | TanStack Query (server state), Zustand (UI state), React Hook Form + Zod (forms) | Query `^5.105`, Zustand `^5.0` |
+| Tables and charts | TanStack Table, Recharts | Table `^9.3`, Recharts `^3.10` |
+| API (`apps/api`) | Node.js, Express, Zod validation, pino logging, Helmet, express-rate-limit | Node 22+, Express `^5.3` |
+| School data | MongoDB with Mongoose | MongoDB 8, Mongoose `^9.11` |
+| Identity mirror (optional) | Neon Postgres with Drizzle ORM | `drizzle-orm ^0.45` |
+| Auth | argon2id passwords, JWT access token (`jose`), opaque refresh token, httpOnly cookies, CSRF double-submit | `argon2 ^0.45`, `jose ^6.2` |
+| Federated sign-in | Google and Facebook OAuth redirect, Firebase Google sign-in | `firebase-admin ^14.5` |
+| Email | Resend, with Nodemailer SMTP fallback and a console transport in development | `resend ^6.37` |
+| Files and PDFs | ImageKit (images and video), `@react-pdf/renderer` (receipts, payslips, report cards) | `@react-pdf/renderer ^4.9` |
+| Payments | Stripe Checkout with a webhook | `stripe 23.1.0` |
+| Language | TypeScript, `strict` and `noUncheckedIndexedAccess` everywhere | `^6.0.3` |
+| Tooling | pnpm, Turborepo, ESLint flat config, Prettier, husky + lint-staged | pnpm `9.15.0`, Turbo `^2.11`, ESLint `^10.14` |
+| Tests | Vitest, Supertest + mongodb-memory-server, Playwright | Vitest `^5.0`, Playwright `^1.64` |
+| This documentation (`apps/docs`) | Astro + Starlight | Astro `^7.4`, Starlight `^0.42` |
+
+The versions come from each workspace's `package.json`. The tech stack is
+locked by the original spec: nothing is swapped without
+the product owner agreeing.
+
+:::caution[Docs and code disagree in a few places]
+- The original spec lists TanStack Table **v8**, but `apps/web/package.json` installs `@tanstack/react-table ^9.3.1`.
+- The root `README.md` still mentions Next.js 16.2, TypeScript 5.7 and ESLint 9; the installed versions are Next 16.4, TypeScript 6.0 and ESLint 10.
+
+This guide always follows the code.
+:::
+
+## How these docs are organised
+
+The sidebar reads like a book, from the big picture down to every field.
+
+| Section | Read it when you want to… |
+|---|---|
+| **Start Here** | Understand what Schola is, how it is structured, who can do what, and the words used everywhere. |
+| **Setup** | Install the project, configure every environment variable and external service, run it locally and load demo data. |
+| **Tutorial: Your First School** | Build a school from nothing, step by step, the way a real school would. Ideal for a walkthrough video. |
+| **Architecture** | Learn how it is built: multi-tenancy, authentication, permissions, the audit log, the data model and the API conventions. |
+| **Features** | Look up one screen: what is on it, every button, which API it calls and which permission it needs. |
+| **Operations** | Test, deploy and troubleshoot Schola, and edit these docs. |
+| **Reference** | Scan complete lists: web routes, API endpoints, permissions, roles, environment variables, statuses, demo accounts. |
+
+Every feature page follows the same shape: a plain-language summary, a
+diagram, the screen, the steps, then the code-level detail. Words in the
+[Glossary](/start-here/glossary/) are linked the first time a page uses them.
+
+<CardGrid>
+  <LinkCard title="How Schola works" description="Platform, schools, roles, the school lifecycle and the three surfaces." href="/start-here/how-schola-works/" />
+  <LinkCard title="Roles at a glance" description="The nine roles plus the visitor state: what each can do and where each lands." href="/start-here/roles-at-a-glance/" />
+  <LinkCard title="Install Schola" description="Clone, install, configure and run the whole platform locally." href="/setup/installation/" />
+  <LinkCard title="Build your first school" description="The tutorial, from the platform owner to the parent portal." href="/tutorial/overview/" />
+</CardGrid>
+
+## Where the truth lives
+
+These docs are written from the source code. When something here and the code
+disagree, the code wins, and the page says so in a caution box.

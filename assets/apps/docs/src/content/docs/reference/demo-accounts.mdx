@@ -1,0 +1,229 @@
+---
+title: Demo accounts
+description: Every account pnpm seed creates — role, email, name, where it lands and what to show with it — plus the four demo schools, the shared password Schola@2026 and the teacher email pattern.
+---
+
+import { Aside, Steps, Card, CardGrid, LinkCard, Badge } from '@astrojs/starlight/components';
+import Pipeline from '../../../components/Pipeline.astro';
+import SourceFile from '../../../components/SourceFile.astro';
+import Roles from '../../../components/Roles.astro';
+import Route from '../../../components/Route.astro';
+import DemoLogin from '../../../components/DemoLogin.astro';
+
+`pnpm seed` fills an empty database with a complete demo platform: a Super
+Admin, one fully set-up school (**Greenfield International School**) with a
+sign-in for every role, and three more schools in other states so every
+platform screen has something to show. This page lists every account it
+creates and what each one is good for — use it when you record a walkthrough
+or test a feature as a particular role.
+
+How to run the seed, its options and what data it creates are covered in
+[Demo data](/setup/demo-data/).
+
+## At a glance
+
+<CardGrid>
+  <Card title="Password" icon="padlock">
+    **`Schola@2026`** for every account — unless you ran the seed with
+    `--password`.
+  </Card>
+  <Card title="Sign in at" icon="laptop">
+    <Route path="/login" /> — `http://localhost:3000/login` in development.
+  </Card>
+  <Card title="Accounts" icon="star">
+    41 sign-ins: 1 Super Admin, 3 other school owners, and 37 people in
+    Greenfield (30 of them teachers).
+  </Card>
+  <Card title="Email domains" icon="email">
+    Only reserved `*.example` domains (RFC 2606), so no real inbox is ever
+    emailed and `--reset` can find them all.
+  </Card>
+</CardGrid>
+
+## Where each account lands
+
+<Pipeline
+  caption="What the sign-in page does after a successful password sign-in."
+  steps={[
+    { label: 'Log in', icon: 'log-in', note: 'Email and password' },
+    { label: 'Role', icon: 'shield', note: 'Primary role from the API' },
+    { label: 'Super Admin', icon: 'landmark', note: '/platform' },
+    { label: 'School role', icon: 'building', note: '/app (or ?next=)' },
+    { label: 'Visitor', icon: 'user', note: '/welcome' },
+  ]}
+/>
+
+The school app's dashboard at <Route path="/app" /> adapts to the person:
+roles that can read the school profile (School Admin, Principal, Vice
+Principal, Accountant) see the school dashboard with live attendance and fee
+figures; teachers, students, parents and staff see their own member
+dashboard. The sidebar shows only what the role's permissions allow.
+
+## The four demo schools
+
+| School | Type | Status | Owner sign-in | What it is for |
+|---|---|---|---|---|
+| Greenfield International School | `school` | `active` | `admin@greenfield.example` | The fully set-up school: 500 students, 30 teachers, 10 staff, every module filled. |
+| Riverside Academy | `school` | `pending_approval` | `owner@riverside.example` | An application to approve or reject on <Route path="/platform/approvals" />. Applied 3 days ago. |
+| Lakeside Coaching Centre | `coaching` | `pending_approval` | `owner@lakeside.example` | A second pending application. Applied 1 day ago. |
+| Hilltop College | `college` | `suspended` | `owner@hilltop.example` | A suspended tenant (reason: "Subscription payment overdue by 60 days."), to show reactivation. |
+
+All four use the locale `en-US` and the currency `USD`. The Super Admin has a
+"New school application" notification for each pending school.
+
+## Greenfield accounts
+
+The main table — the accounts `pnpm seed` prints when it finishes. Names come
+from a fixed random seed, so they are the same on every run with the default
+500 students.
+
+| Role | Email | Name | Lands on | Show with it |
+|---|---|---|---|---|
+| Super Admin | `superadmin@schola.example` | Sam Platform | <Route path="/platform" /> | The platform dashboard, approving Riverside, reactivating Hilltop, platform users, settings and the platform audit log. |
+| School Admin | `admin@greenfield.example` | Amira Hossain | <Route path="/app" /> | Everything in the school: setup, people, finance, members and roles, school settings, audit log, admin transfer. Owner of Greenfield. |
+| Principal | `principal@greenfield.example` | Richard Okafor | <Route path="/app" /> | Academic leadership: classes and subjects, exams, timetable, leave approvals, admissions, library management, announcements, reports. No fees or payroll. |
+| Vice Principal | `viceprincipal@greenfield.example` | Helen Marsh | <Route path="/app" /> | Read-mostly academic access: browse classes, students, attendance and grades, write remarks, approve leave. |
+| Accountant | `accountant@greenfield.example` | Ibrahim Ahmed | <Route path="/app" /> | Fees (structures, invoices, payments, waivers, Stripe **Pay**) and payroll (salary structures, payslips, **Pay**). Also has a staff record as Senior Accountant. |
+| Teacher | `teacher@greenfield.example` | Grace Mensah | <Route path="/app" /> | **My classes**, the Grade 3 · A register (the seed has already taken today's), entering marks, writing remarks, own attendance and payslips, a pending leave request for a training workshop. Class teacher of Grade 3; leads Grade 3 · A. |
+| Student | `student@greenfield.example` | Adam Singh | <Route path="/app" /> | **My attendance**, **My grades** (with the report card PDF), **My fees** with **Pay online**. Grade 8 · A, a hostel boarder with a library loan. |
+| Parent | `parent@greenfield.example` | Sofia Singh | <Route path="/app" /> | **My children**: two children, Mateo Singh (Grade 1 · A) and Ryan Singh (Grade 1 · B), each with attendance, grades, remarks, fees and bus details. Has leave requests for a child. |
+| Staff | `staff@greenfield.example` | Ruby Novak | <Route path="/app" /> | The staff member view: own attendance, payslips, leave and the library catalogue. Librarian. |
+
+<Aside type="note" title="Same surname, different families">
+The demo student Adam Singh is **not** one of the demo parent's children,
+even though they share a surname. To show the parent and student portals with
+the same child, sign in as `parent@greenfield.example` and open one of her
+two children.
+</Aside>
+
+<DemoLogin as="School Admin" email="admin@greenfield.example" go="/app" />
+
+### The other school owners
+
+| Email | Name | School | What happens when they sign in |
+|---|---|---|---|
+| `owner@riverside.example` | Daniel Brooks | Riverside Academy (pending) | Refused: "Your school's application is waiting for approval. You'll get an email when it's approved." The account is inactive and unverified until the Super Admin approves the school. After approval it signs in as School Admin of Riverside and lands on <Route path="/app" />. |
+| `owner@lakeside.example` | Priya Natarajan | Lakeside Coaching Centre (pending) | Same as Riverside. The seed's printed list leaves this one out, but the account exists. |
+| `owner@hilltop.example` | Marcus Webb | Hilltop College (suspended) | Refused. The account itself is active, but its only school is suspended, so the API answers `403 INACTIVE_ACCOUNT` and the sign-in form shows its message: "This school is suspended, so sign-in is paused for everyone there. Contact the platform team to restore access." After the Super Admin reactivates Hilltop, it signs in as School Admin. Not in the printed list. |
+
+<Aside type="tip" title="Demo suspension as a lock-out">
+Sign in as `owner@hilltop.example` to show the refusal, then reactivate Hilltop
+College as the Super Admin and sign in again. To show an open session ending,
+suspend Greenfield while another browser is signed in as one of its members:
+their next request is refused with `401`, and reloading the page sends them to
+sign in. Reactivate Greenfield afterwards.
+</Aside>
+
+## All 30 teacher accounts
+
+Every teacher signs in as **`firstname.lastname@greenfield.example`** (lower
+case, letters only), with the same password — except Grace Mensah, whose
+account is the documented `teacher@greenfield.example`. The first 20 teachers
+each lead one section; the first teacher of each grade is also its class
+teacher. The last 10 are subject specialists.
+
+| ID | Name | Email | Leads section | Class teacher of | Subjects |
+|---|---|---|---|---|---|
+| TCH-001 | Farida Begum | `farida.begum@greenfield.example` | Grade 1 · A | Grade 1 | MATH, SCI |
+| TCH-002 | Daniel Osei | `daniel.osei@greenfield.example` | Grade 1 · B | — | ENG, SOC |
+| TCH-003 | Mei Tanaka | `mei.tanaka@greenfield.example` | Grade 2 · A | Grade 2 | ENG, MATH |
+| TCH-004 | Rafael Moreno | `rafael.moreno@greenfield.example` | Grade 2 · B | — | SOC, ENG |
+| TCH-005 | Grace Mensah | `teacher@greenfield.example` | Grade 3 · A | Grade 3 | MATH, SCI |
+| TCH-006 | Omar Haddad | `omar.haddad@greenfield.example` | Grade 3 · B | — | MATH |
+| TCH-007 | Lina Kowalski | `lina.kowalski@greenfield.example` | Grade 4 · A | Grade 4 | ENG, SOC |
+| TCH-008 | Samuel Adeyemi | `samuel.adeyemi@greenfield.example` | Grade 4 · B | — | SCI, MATH |
+| TCH-009 | Hannah Larsen | `hannah.larsen@greenfield.example` | Grade 5 · A | Grade 5 | ENG, FRE |
+| TCH-010 | Arjun Singh | `arjun.singh@greenfield.example` | Grade 5 · B | — | SCI, MATH |
+| TCH-011 | Ayesha Chowdhury | `ayesha.chowdhury@greenfield.example` | Grade 6 · A | Grade 6 | SOC, ENG |
+| TCH-012 | Lucas Fischer | `lucas.fischer@greenfield.example` | Grade 6 · B | — | MATH, CS |
+| TCH-013 | Nadia Islam | `nadia.islam@greenfield.example` | Grade 7 · A | Grade 7 | ENG |
+| TCH-014 | Ethan Costa | `ethan.costa@greenfield.example` | Grade 7 · B | — | SCI, CHEM |
+| TCH-015 | Sofia Rossi | `sofia.rossi@greenfield.example` | Grade 8 · A | Grade 8 | SOC |
+| TCH-016 | Kofi Nakamura | `kofi.nakamura@greenfield.example` | Grade 8 · B | — | MATH |
+| TCH-017 | Isabella Dubois | `isabella.dubois@greenfield.example` | Grade 9 · A | Grade 9 | BIO, SCI |
+| TCH-018 | Noah Petrov | `noah.petrov@greenfield.example` | Grade 9 · B | — | PHY, MATH |
+| TCH-019 | Zara Yilmaz | `zara.yilmaz@greenfield.example` | Grade 10 · A | Grade 10 | ENG |
+| TCH-020 | Yusuf Kaur | `yusuf.kaur@greenfield.example` | Grade 10 · B | — | CHEM, BIO |
+| TCH-021 | Ines Silva | `ines.silva@greenfield.example` | — | — | PE |
+| TCH-022 | Mateo Lopez | `mateo.lopez@greenfield.example` | — | — | PE |
+| TCH-023 | Elena Mendes | `elena.mendes@greenfield.example` | — | — | ART |
+| TCH-024 | Felix Sato | `felix.sato@greenfield.example` | — | — | MUS |
+| TCH-025 | Maya Ortiz | `maya.ortiz@greenfield.example` | — | — | FRE |
+| TCH-026 | Ryan Garcia | `ryan.garcia@greenfield.example` | — | — | CS |
+| TCH-027 | Leila Hassan | `leila.hassan@greenfield.example` | — | — | CS, MATH |
+| TCH-028 | Hugo Novak | `hugo.novak@greenfield.example` | — | — | PHY |
+| TCH-029 | Iris Patel | `iris.patel@greenfield.example` | — | — | BIO |
+| TCH-030 | Owen Ibrahim | `owen.ibrahim@greenfield.example` | — | — | ENG, MATH |
+
+Subject codes: ENG English, MATH Mathematics, SCI Science, SOC Social Studies,
+FRE French, CS Computer Science, ART Art & Design, MUS Music, PE Physical
+Education, PHY Physics, CHEM Chemistry, BIO Biology.
+
+## Suggested tours
+
+<CardGrid>
+  <Card title="Platform owner" icon="server">
+    <Roles list={['super_admin']} /> Sign in as `superadmin@schola.example`.
+    Open <Route path="/platform/approvals" />, approve Riverside Academy, then
+    sign in as `owner@riverside.example` to see the new school's empty app.
+  </Card>
+  <Card title="A school day" icon="clock">
+    <Roles list={['teacher']} /> On the day you seed, 16 sections have today's
+    register done, Grade 9 · A is half done, and Grade 9 · B, Grade 10 · A and
+    Grade 10 · B are not taken. Sign in as `zara.yilmaz@greenfield.example`
+    (leads Grade 10 · A) and take the register.
+  </Card>
+  <Card title="Money" icon="analytics">
+    <Roles list={['accountant']} /> Sign in as `accountant@greenfield.example`.
+    Many of this month's invoices are still unpaid — collect one by hand, then
+    one with Stripe ([setup](/setup/services/stripe/)).
+  </Card>
+  <Card title="Families" icon="star">
+    <Roles list={['parent', 'student']} /> Sign in as `parent@greenfield.example`
+    and open **My children**; then as `student@greenfield.example` and open
+    **My grades** to download the report card.
+  </Card>
+</CardGrid>
+
+## Changing or resetting the accounts
+
+- **Another password:** `pnpm seed -- --reset --password 'Another-Pass1'`. It
+  must pass the same strength rules as sign-up. The seed then prints "(the
+  --password you passed)" instead of the password.
+- **Start over:** `pnpm seed -- --reset` removes the demo schools (with
+  everything stored under them) and every account on the demo domains, then
+  seeds a fresh copy. `sunrise.example` — the [tutorial](/tutorial/overview/)'s
+  Sunrise Academy — is one of those domains, so the reset removes that school
+  too. Other schools and accounts are untouched; audit log entries stay.
+- **Fewer or more students:** `--students 20` to `--students 600`. The
+  student and parent names (including Adam Singh and Sofia Singh) are only
+  guaranteed with the default 500.
+- **Production:** the seed refuses to run with `NODE_ENV=production` unless
+  you pass `--allow-production` **and** your own `--password`. Never leave the
+  public demo password on a real deployment.
+
+<Aside type="tip" title="Password reset emails">
+"Forgot?" works for demo accounts, but the addresses are not real inboxes. In
+development the reset link appears in the API log (console email transport).
+See [Email](/setup/services/email/).
+</Aside>
+
+## Under the hood
+
+- <SourceFile path="apps/api/src/seed/demo-school.ts" symbol="buildDemoDataset" /> — builds every account, school and record as plain documents (no database access). `DEMO_DEFAULT_PASSWORD`, `DEMO_EMAIL_DOMAINS` and the teacher email rule live here.
+- <SourceFile path="apps/api/src/seed/run-demo-seed.ts" symbol="runDemoSeed" /> — writes the dataset, creates the roles for the active and suspended schools, assigns memberships, hashes the shared password once with argon2id, and mirrors accounts to Neon when `DATABASE_URL` is set.
+- <SourceFile path="apps/api/src/seed/demo-operations.ts" /> — timetable, leave, admissions, library, transport and hostel records tied to the demo accounts.
+- <SourceFile path="apps/api/src/jobs/seed-demo.ts" /> — the `pnpm seed` command, its options and the printed sign-in table.
+- <SourceFile path="apps/web/e2e/helpers.ts" /> — the Playwright tests sign in with these same accounts (`E2E_PASSWORD`, default `Schola@2026`).
+
+Accounts are created with `emailVerifiedAt` already set (except the two
+pending owners) and the `password` provider only.
+
+## Related pages
+
+<CardGrid>
+  <LinkCard title="Demo data" description="Run the seed and see everything it creates." href="/setup/demo-data/" />
+  <LinkCard title="Roles at a glance" description="What each role is for, in plain language." href="/start-here/roles-at-a-glance/" />
+  <LinkCard title="Roles reference" description="Every role and its permissions." href="/reference/roles/" />
+  <LinkCard title="Tutorial: your first school" description="Build a school from scratch instead." href="/tutorial/overview/" />
+</CardGrid>

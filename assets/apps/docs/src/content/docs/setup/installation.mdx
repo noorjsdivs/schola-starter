@@ -1,0 +1,233 @@
+---
+title: Installation
+description: Clone the Schola monorepo, install it with pnpm, create your local env file with real secrets, start MongoDB and run the platform for the first time.
+---
+
+import { Aside, Steps, Tabs, TabItem, CardGrid, LinkCard, FileTree } from '@astrojs/starlight/components';
+import Pipeline from '../../../components/Pipeline.astro';
+import SourceFile from '../../../components/SourceFile.astro';
+import DemoLogin from '../../../components/DemoLogin.astro';
+import Api from '../../../components/Api.astro';
+
+This page takes you from an empty folder to Schola running on your machine,
+with the demo school loaded. It takes about ten minutes, most of it waiting
+for `pnpm install`. Check the [prerequisites](/setup/prerequisites/) first:
+Node 22+, pnpm 9, Git and MongoDB 8.
+
+<Pipeline
+  caption="The whole installation in six moves."
+  steps={[
+    { label: 'Clone', icon: 'terminal', note: 'git clone' },
+    { label: 'Install', icon: 'cloud-upload', note: 'pnpm install' },
+    { label: 'Configure', icon: 'key', note: 'cp .env test.env' },
+    { label: 'Database', icon: 'database', note: 'start MongoDB' },
+    { label: 'Seed', icon: 'sparkles', note: 'pnpm seed' },
+    { label: 'Run', icon: 'server', note: 'pnpm dev' },
+  ]}
+/>
+
+## Step by step
+
+<Steps>
+
+1. **Clone the repository** and step into it.
+
+   ```sh
+   git clone https://github.com/noorjsdivs/schola.git
+   cd schola
+   ```
+
+   Everything below runs from this folder — the repository root.
+
+2. **Install every workspace** with pnpm.
+
+   ```sh
+   corepack enable   # once per machine; gives you the pnpm version the repo pins
+   pnpm install
+   ```
+
+   One install covers the web app, the API, the docs and every shared package.
+   It also:
+
+   - runs the root `prepare` script, which sets up **husky** so a pre-commit hook lints and formats the files you commit;
+   - downloads the **Stripe CLI** binary for the API (`@stripe/cli`).
+
+3. **Create your local env file.** The repo commits a template called `.env`
+   with every setting the project reads. Copy it to `test.env` — a file Git
+   ignores — and put your own values there.
+
+   ```sh
+   cp .env test.env
+   ```
+
+   In development the API reads `test.env` first and falls back to `.env` for
+   anything `test.env` does not define. So `test.env` is where your values go.
+
+4. **Generate the four secrets** and paste them into `test.env`.
+
+   ```sh
+   openssl rand -hex 32     # → JWT_ACCESS_SECRET
+   openssl rand -hex 32     # → JWT_REFRESH_SECRET
+   openssl rand -hex 32     # → CSRF_SECRET
+   openssl rand -base64 32  # → ENCRYPTION_MASTER_KEY
+   ```
+
+   Each command prints a new random value; use a different one for each key.
+   The result in `test.env` looks like this (with your own values):
+
+   ```ini
+   JWT_ACCESS_SECRET=<64 hex characters>
+   JWT_REFRESH_SECRET=<64 hex characters>
+   CSRF_SECRET=<64 hex characters>
+   ENCRYPTION_MASTER_KEY=<44 base64 characters>
+   ```
+
+   `JWT_ACCESS_SECRET` is needed to sign in at all, and `ENCRYPTION_MASTER_KEY`
+   is needed to save or read any phone number, birthday or address — including
+   when loading the demo data.
+
+5. **Point Schola at your database.** Set `MONGODB_URI` in `test.env`
+   explicitly, so it never falls back to whatever the template holds.
+
+   <Tabs>
+     <TabItem label="Local MongoDB or Docker">
+       ```ini
+       MONGODB_URI=mongodb://localhost:27017/schola
+       ```
+     </TabItem>
+     <TabItem label="MongoDB Atlas">
+       ```ini
+       MONGODB_URI=mongodb+srv://<user>:<password>@<cluster>.mongodb.net/schola?retryWrites=true&w=majority
+       ```
+
+       Allow your IP address under Atlas → Network Access. See [MongoDB](/setup/services/mongodb/).
+     </TabItem>
+   </Tabs>
+
+6. **Switch off the services you have not set up yet.** For a first run, make
+   sure these lines in `test.env` are present and **empty**. An empty line in
+   `test.env` wins over a value in `.env`, so this guarantees email goes to the
+   API log and the other integrations stay off until you configure them.
+
+   ```ini
+   RESEND_API_KEY=
+   SMTP_HOST=
+   STRIPE_SECRET_KEY=
+   STRIPE_WEBHOOK_SECRET=
+   IMAGEKIT_PUBLIC_KEY=
+   IMAGEKIT_PRIVATE_KEY=
+   IMAGEKIT_URL_ENDPOINT=
+   DATABASE_URL=
+   ```
+
+   Add real keys later, one service at a time, with the pages under
+   **Setup → External services**.
+
+7. **Start MongoDB.**
+
+   ```sh
+   docker run --name schola-mongo -p 27017:27017 -d mongo:8
+   # or, with Homebrew on macOS:
+   brew services start mongodb-community@8.0
+   ```
+
+8. **Load the demo platform** (optional, but recommended for a first look).
+
+   ```sh
+   pnpm seed
+   ```
+
+   This creates a Super Admin, Greenfield International School with 500
+   students, and a sign-in for every role. It prints the accounts when it
+   finishes. Details: [Demo data](/setup/demo-data/).
+
+9. **Start everything.**
+
+   ```sh
+   pnpm dev
+   ```
+
+   Turborepo starts three dev servers side by side: the web app on port 3000,
+   the API on port 8000 and these docs on port 3002.
+
+10. **Check that it works.**
+
+    ```sh
+    curl http://localhost:8000/api/v1/health
+    ```
+
+    A healthy API answers with the standard envelope:
+
+    ```json
+    { "success": true, "data": { "ok": true, "service": "schola-api", "version": "0.0.0", "timestamp": "…" } }
+    ```
+
+    Then open `http://localhost:3000` (the public site) and
+    `http://localhost:3000/login`.
+
+</Steps>
+
+<DemoLogin as="School Admin" email="admin@greenfield.example" go="/app">
+  Or sign in as `superadmin@schola.example` to see the platform console at `/platform`.
+</DemoLogin>
+
+## What you end up with
+
+<FileTree>
+- schola/
+  - .env the committed template — every key, no secrets of yours
+  - **test.env** your local values (gitignored)
+  - apps/
+    - web/ Next.js web app — http://localhost:3000
+    - api/ Express API — http://localhost:8000/api/v1
+    - docs/ this site — http://localhost:3002
+  - packages/ shared code used by web and api
+  - node_modules/
+</FileTree>
+
+## Never commit secrets
+
+- `test.env` and every `.env*.local` file are listed in `.gitignore`. Keep it that way.
+- The committed `.env` and `apps/*/.env.production` files are **templates**: key names, safe defaults and comments only.
+- Generate your own secrets. Never reuse a value you find in a committed file or in someone else's `test.env`.
+- If a real secret ever lands in a commit, rotate it at its provider — deleting the line is not enough, because Git history keeps it.
+
+<Aside type="danger" title="Losing the encryption key loses the data">
+`ENCRYPTION_MASTER_KEY` encrypts every phone number, birthday and address.
+Records written with one key cannot be read with another. Keep a copy of the
+key you use for any database you care about, and never change it on a database
+that already holds data. See [Encryption](/setup/services/encryption/).
+</Aside>
+
+## If something goes wrong
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| `pnpm: command not found` | pnpm is not installed | Run `corepack enable`, or `npm install -g pnpm@9`. |
+| `Unsupported engine` warning during install | Node is older than 22 | Install Node 22 and reinstall. |
+| API exits with `Invalid server environment:` and a list | A value fails validation — for example a secret shorter than 32 characters, or a malformed URL | Fix the listed keys in `test.env`. See [Environment variables](/setup/environment-variables/). |
+| API exits with `failed to start` and `ECONNREFUSED 127.0.0.1:27017` | MongoDB is not running | Start MongoDB (step 7). |
+| `querySrv ENOTFOUND` or a timeout with Atlas | Wrong URI, or your IP is not allowed | Check `MONGODB_URI` and Atlas → Network Access. |
+| Sign-in fails with the message `JWT_ACCESS_SECRET is not set` | The access secret is blank | Generate it (step 4) and restart the API. |
+| `pnpm seed` stops with `ENCRYPTION_MASTER_KEY is not set` | The encryption key is blank | Generate it (step 4). |
+| `pnpm seed` stops with `Demo data is already in this database` | You seeded before | Run `pnpm seed -- --reset`. |
+| The API terminal shows a Stripe error | The Stripe CLI is not signed in | Harmless. Run `pnpm --filter @schola/api exec stripe login` if you need payments. |
+
+[Troubleshooting](/operations/troubleshooting/) covers more cases.
+
+## Under the hood
+
+- <SourceFile path="apps/api/src/load-env.ts" /> — which env files the API reads, in which order.
+- <SourceFile path="packages/config/src/server.ts" symbol="loadServerEnv" /> — validates every API setting at startup.
+- <SourceFile path="apps/api/src/index.ts" /> — connects to MongoDB, writes permissions and platform roles, then listens on `API_PORT`.
+- <SourceFile path="turbo.json" /> — what `pnpm dev` runs.
+- <Api method="GET" path="health" /> — the health check used above and by CI.
+
+## Next steps
+
+<CardGrid>
+  <LinkCard title="Environment variables" description="What every setting does, its default, and where to get it." href="/setup/environment-variables/" />
+  <LinkCard title="Running locally" description="Running apps one at a time, the /api proxy, your first own Super Admin, the Stripe listener." href="/setup/running-locally/" />
+  <LinkCard title="Demo data" description="Everything pnpm seed creates, and its options." href="/setup/demo-data/" />
+  <LinkCard title="Tutorial" description="Build a school from scratch, step by step." href="/tutorial/overview/" />
+</CardGrid>

@@ -1,0 +1,259 @@
+---
+title: 4. Set up academics
+description: As Laila, the Sunrise Academy owner, check the school settings, create the 2026-2027 academic year, add three subjects and a first teacher, then build Grade 1 with sections A and B.
+---
+
+import { Aside, Steps, Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+import Pipeline from '../../../components/Pipeline.astro';
+import SourceFile from '../../../components/SourceFile.astro';
+import Api from '../../../components/Api.astro';
+import Perm from '../../../components/Perm.astro';
+import Route from '../../../components/Route.astro';
+import Screenshot from '../../../components/Screenshot.astro';
+
+A new school is an empty shell. Before anyone can take a register or send an
+invoice, Schola needs the school's *structure*: which
+[academic year](/start-here/glossary/) is running, which subjects are taught,
+and which classes and [sections](/start-here/glossary/#section) exist. Every
+later chapter hangs off these records — a register belongs to a section, a
+section to a class, and a class to one academic year.
+
+## What you'll do
+
+- Check and save the school's details on **School settings**.
+- Create the academic year **2026-2027** and mark it current.
+- Add the subjects **Mathematics**, **English** and **Science**.
+- Add the first teacher, **Omar Farouk**, so you can pick him as the class and
+  section teacher.
+- Create the class **Grade 1** with sections **A** and **B**.
+
+## Before you start
+
+- **Owner** profile: signed in as `owner@sunrise.example` (School Admin).
+- You are on the dashboard at <Route path="/app" /> with the **Get your school
+  running** checklist at 0 of 8.
+
+## How it fits together
+
+<Pipeline
+  caption="The order matters: each record needs the one before it."
+  steps={[
+    { label: 'Settings', icon: 'settings', note: 'Name, contact, currency' },
+    { label: 'Year', icon: 'calendar-days', note: '2026-2027, current' },
+    { label: 'Subjects', icon: 'book-open', note: 'MATH, ENG, SCI' },
+    { label: 'Teacher', icon: 'user-plus', note: 'Omar Farouk' },
+    { label: 'Class', icon: 'graduation-cap', note: 'Grade 1' },
+    { label: 'Sections', icon: 'layers', note: 'A and B, 30 seats' },
+  ]}
+/>
+
+<Aside type="note" title="Why the teacher comes before the class">
+A teacher is not required: **Class teacher (optional)** and **Section teacher
+(optional)** can stay on "No class teacher" / "No section teacher", and you can
+assign one later from the row menu. This chapter adds Omar first only so it can
+pick him in both forms and finish the class in one pass.
+</Aside>
+
+## Steps
+
+### School settings
+
+<Steps>
+
+1. In the sidebar, scroll to **Administration** and click **School settings**.
+   The page says "School details and admin transfer. Your own account lives in
+   My profile."
+
+2. The **School profile** card shows what Laila typed on the application:
+   **School name** "Sunrise Academy", **Type** "School (K-12)", **Expected
+   students** 120, **Address**, **Contact email**, **Contact phone**, and
+   **Locale** `en-US` and **Currency** `USD` (the defaults).
+
+   <Screenshot name="tutorial-school-settings" alt="School settings with the School profile card and the Transfer admin role card" path="/app/settings" />
+
+3. Change **Expected students** to `150`. **Save changes** becomes clickable
+   once something has changed. Click it — the toast says **"School profile
+   saved."**
+
+</Steps>
+
+The currency set here is what every invoice, receipt and payslip uses
+(<Api method="PATCH" path="schools/current" perm="school:update:tenant" />).
+Leave **Transfer admin role** alone — it hands the school to someone else.
+
+### The academic year
+
+<Steps>
+
+1. Click **Academic years** under **School setup**. The list is empty: "No
+   academic years yet".
+
+2. Click **Add academic year**. The **New academic year** drawer opens.
+
+3. Fill it in and tick the box:
+
+   | Field | Value |
+   |---|---|
+   | Name | `2026-2027` |
+   | Start date | `08/01/2026` |
+   | End date | `06/30/2027` |
+   | Make this the current academic year | ticked |
+
+   <Screenshot name="tutorial-academic-year-form" alt="The New academic year drawer filled in for 2026-2027" path="/app/academic-years" />
+
+4. Click **Create academic year**. The toast says **"Academic year
+   created."** and the row shows a **current** tag.
+
+   <Screenshot name="tutorial-academic-years-list" alt="Academic years with 2026-2027 marked current" path="/app/academic-years" />
+
+</Steps>
+
+Only one year can be current; it is the year new classes, enrollments, fee
+structures and the dashboard use by default.
+
+### Subjects
+
+<Steps>
+
+1. Click **Subjects**, then **Add subject**.
+
+2. Fill in **Name**, **Code** and **Description (optional)**, then click
+   **Create subject**. Repeat for all three:
+
+   | Name | Code | Description |
+   |---|---|---|
+   | `Mathematics` | `MATH` | `Numbers, shapes and problem solving` |
+   | `English` | `ENG` | `Reading, writing and speaking` |
+   | `Science` | `SCI` | `The natural world, through experiments` |
+
+   <Screenshot name="tutorial-subject-form" alt="The New subject drawer for Mathematics, code MATH" path="/app/subjects" />
+
+3. Each save shows **"Subject created."** The list now has three rows.
+
+   <Screenshot name="tutorial-subjects-list" alt="The Subjects list with English, Mathematics and Science" path="/app/subjects" />
+
+</Steps>
+
+### The first teacher
+
+<Steps>
+
+1. Click **Teachers** under **People**, then **Add teacher**. The **New
+   teacher** drawer says "Creates their sign-in and emails a link to set a
+   password."
+
+2. Fill it in:
+
+   | Field | Value |
+   |---|---|
+   | Employee ID | `SUN-T001` |
+   | Email | `teacher@sunrise.example` |
+   | First name / Last name | `Omar` / `Farouk` |
+   | Phone (optional) | `+1 555 0150` |
+   | Joined (optional) | `08/01/2026` |
+   | Qualification (optional) | `B.Ed Primary Education` |
+   | Subjects they teach | tick **English**, **Mathematics** and **Science** |
+
+   <Screenshot name="tutorial-teacher-form" alt="The New teacher drawer for Omar Farouk with three subjects ticked" path="/app/teachers" />
+
+3. Click **Add teacher**. The toast says **"Teacher added — they'll get an
+   email to set a password."** Omar appears in the list with his subjects and
+   "Not assigned" under **Leads**.
+
+   <Screenshot name="tutorial-teachers-list" alt="The Teachers list with Omar Farouk" path="/app/teachers" />
+
+</Steps>
+
+Saving a teacher creates three things at once: Omar's sign-in account, his
+**Teacher** role in Sunrise Academy, and his teacher record
+(<Api method="POST" path="teachers" perm="teacher:create" />). He sets his own
+password from the email; you do that in the next chapter.
+
+<Aside type="note" title="If the set-password email can't be delivered">
+The email is sent after Omar is saved, and it is best-effort. When the provider
+cannot deliver it, the API still answers `201` and the toast still appears; the
+API log notes the failure and the `teacher.create` audit entry records
+`inviteEmail: "failed"`. Omar can then use **Forgot?** on the sign-in page, or
+you can follow [chapter 5](/tutorial/add-people/) with the console transport.
+</Aside>
+
+### The class and its sections
+
+<Steps>
+
+1. Click **Classes & sections**, then **Add class**. The **New class** drawer
+   says "A class belongs to one academic year. Sections are added inside it."
+
+2. Fill it in:
+
+   | Field | Value |
+   |---|---|
+   | Academic year | **2026-2027 (current)** (already picked) |
+   | Name | `Grade 1` |
+   | Description (optional) | `First year of primary school` |
+   | Class teacher (optional) | **Omar Farouk (SUN-T001)** |
+   | Subjects taught | tick **English**, **Mathematics** and **Science** |
+
+   <Screenshot name="tutorial-class-form" alt="The New class drawer for Grade 1 with Omar Farouk as class teacher" path="/app/classes" />
+
+3. Click **Create class**. The toast says **"Class created."**
+
+4. Click **Grade 1** in the list. The class page reads "2026-2027 · Class
+   teacher: Omar Farouk", with tiles **Sections 0**, **Students 0** and
+   **Seats —**, and "No sections yet".
+
+5. Click **Add section**. In the **New section** drawer ("A group of students
+   inside Grade 1.") type **Name** `A`, **Capacity** `30` ("0 means no limit.")
+   and pick **Section teacher (optional)** **Omar Farouk (SUN-T001)**.
+
+   <Screenshot name="tutorial-section-form" alt="The New section drawer: name A, capacity 30, section teacher Omar Farouk" path="/app/classes/…" />
+
+6. Click **Create section** — **"Section created."** Repeat for section `B`,
+   capacity `30`, section teacher **Omar Farouk**.
+
+7. The class page now shows **Sections 2**, **Students 0**, **Seats 60**, and
+   both sections at "0/30".
+
+   <Screenshot name="tutorial-class-detail-sections" alt="Grade 1 with sections A and B, each 0/30, led by Omar Farouk" path="/app/classes/…" />
+
+</Steps>
+
+## Check your work
+
+- Back on <Route path="/app" />, the checklist ticks **Create the academic
+  year**, **Add subjects**, **Create classes**, **Add sections to each class**
+  and **Add teachers**.
+- <Route path="/app/teachers" /> shows Omar leading "Grade 1 · A" and "Grade 1 ·
+  B".
+- <Route path="/app/classes" /> lists Grade 1 in 2026-2027.
+
+## If something goes wrong
+
+- **A red message under a field** — fix that field and click **Create class**
+  (or **Create section**) again. The teacher pickers may stay empty.
+- **"Could not save the class."** with a field message — the name is empty or
+  longer than 60 characters, or no academic year is picked.
+- **Section full** later on — raise **Capacity** with the section's row menu,
+  or set it to `0` for no limit.
+- **You cannot delete the academic year** — "Only years without classes can be
+  deleted." Delete its classes first.
+
+## Under the hood
+
+- <SourceFile path="apps/web/src/components/school/class-form.tsx" /> and <SourceFile path="apps/web/src/components/school/section-form.tsx" /> — the class and section drawers.
+- <SourceFile path="apps/api/src/modules/people/teachers.routes.ts" /> — creating a teacher and their account.
+- <SourceFile path="apps/api/src/services/account-invite.ts" /> — the best-effort set-password invite (template `accountInviteTemplate` in <SourceFile path="apps/api/src/services/email/templates.ts" />).
+- <Api method="POST" path="academic-years" perm="academic_year:create" /> · <Api method="POST" path="subjects" perm="subject:create" /> · <Api method="POST" path="classes" perm="class:create" /> · <Api method="POST" path="sections" perm="section:create" />
+
+## Learn more
+
+<CardGrid>
+  <LinkCard title="Academic years" description="Current year, editing and deleting." href="/features/academics/academic-years/" />
+  <LinkCard title="Subjects" description="Codes, descriptions and where subjects are used." href="/features/academics/subjects/" />
+  <LinkCard title="Classes and sections" description="Capacity, class and section teachers, the roster." href="/features/academics/classes-and-sections/" />
+  <LinkCard title="Settings and profile" description="School details, locale, currency and admin transfer." href="/features/school/settings-and-profile/" />
+</CardGrid>
+
+## Next
+
+<LinkCard title="5. Add people" description="Give Omar his sign-in, add staff, students and a parent, and grant the Accountant role." href="/tutorial/add-people/" />

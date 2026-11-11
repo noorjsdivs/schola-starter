@@ -1,0 +1,177 @@
+---
+title: 3. Approve the school
+description: As the Super Admin, review the Sunrise Academy application on the Approvals page, approve it, and see what the owner Laila Rahman gets on her first sign-in.
+---
+
+import { Aside, Steps, Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+import Pipeline from '../../../components/Pipeline.astro';
+import SourceFile from '../../../components/SourceFile.astro';
+import Api from '../../../components/Api.astro';
+import Perm from '../../../components/Perm.astro';
+import Roles from '../../../components/Roles.astro';
+import Route from '../../../components/Route.astro';
+import DemoLogin from '../../../components/DemoLogin.astro';
+import Screenshot from '../../../components/Screenshot.astro';
+
+Sunrise Academy is waiting for a decision. In this chapter the Super Admin
+reads the application and approves it. Approval is the switch that turns an
+application into a working school: it creates the school's roles, makes the
+owner its School Admin, switches the owner's account on and marks their email
+verified.
+
+## What you'll do
+
+- Open the application on <Route path="/platform/approvals" /> and read its details.
+- Approve it.
+- Sign in as the owner and land on the new school's empty dashboard.
+
+## Before you start
+
+- **Platform** profile: signed in as `superadmin@schola.example`.
+- **Owner** profile: signed out, ready to sign in as `owner@sunrise.example`.
+
+## How it works
+
+<Pipeline
+  caption="What Approve does, in order."
+  steps={[
+    { label: 'Roles', icon: 'shield', note: 'Eight school roles created' },
+    { label: 'Active', icon: 'badge-check', note: 'status = active' },
+    { label: 'Owner on', icon: 'user-check', note: 'Active and verified' },
+    { label: 'School Admin', icon: 'key', note: 'Owner gets the role' },
+    { label: 'Tell owner', icon: 'mail', note: 'Email and notification' },
+  ]}
+/>
+
+<Api method="POST" path="platform/schools/:id/approve" /> refuses any school
+that is not `pending_approval` ("Cannot approve a school in status …"). It
+seeds the school's eight roles (School Admin, Principal, Vice Principal,
+Teacher, Accountant, Student, Parent, Staff), sets `status: "active"` with
+`approvedAt` and `approvedBy`, sets the owner's `isActive` and
+`emailVerifiedAt`, gives the owner the `school_admin` role in this school,
+emails "your school is approved" with a link to `/login`, adds the owner
+notification "Your school is live", and writes a `school.approve` audit entry.
+
+## Steps
+
+### Review the application
+
+<Steps>
+
+1. In the **Platform** profile, click **Approvals** in the sidebar. The page
+   reads "Schools waiting for a decision. Approve them or send them back with
+   a reason." **Sunrise Academy** is at the top — newest first.
+
+   <Screenshot name="tutorial-approvals-list" alt="The Approvals list with Sunrise Academy pending at the top" path="/platform/approvals" />
+
+2. Click **Sunrise Academy** to open its detail page. Check the three cards:
+   - **Institution** — contact email `office@sunrise.example`, phone
+     `+1 555 0142`, the address and "~120" expected students.
+   - **Founding admin** — Laila Rahman, `owner@sunrise.example`, **Email
+     verified** "Not yet", **Account active** "No".
+   - **Lifecycle** — the **Applied** time; **Approved**, **Approver**,
+     **Suspended** and **Rejected** are still empty.
+
+   <Screenshot name="tutorial-approvals-school-detail" alt="Sunrise Academy's detail page while pending: Institution, Founding admin and Lifecycle cards" path="/platform/schools/…" />
+
+3. Click **All schools** (the back link) or **Approvals** in the sidebar to
+   return to the list.
+
+</Steps>
+
+### Approve it
+
+<Steps>
+
+1. On the Sunrise Academy row, click the **⋯** button (**Open actions**). The
+   menu shows the school's name, then **View details**, **Approve** and
+   **Reject…**.
+
+   <Screenshot name="tutorial-approvals-row-menu" alt="The row menu for Sunrise Academy with View details, Approve and Reject" path="/platform/approvals" />
+
+2. Click **Approve**. A toast says **"School approved."** and Sunrise Academy
+   leaves the Approvals list.
+
+3. Open **All schools**. Sunrise Academy now shows the status **Active**.
+
+   <Screenshot name="tutorial-platform-schools" alt="All schools, with Sunrise Academy active" path="/platform/schools" />
+
+4. Open Sunrise Academy again. The badge reads **Active**, **Email verified**
+   shows the approval time and **Account active** reads "Yes".
+
+   <Screenshot name="tutorial-approved-school-detail" alt="Sunrise Academy after approval: active, with the owner verified and active" path="/platform/schools/…" />
+
+</Steps>
+
+:::tip[Rejecting instead]
+**Reject…** opens a box for a reason ("Rejecting closes the application.
+Reason will be emailed to the applicant."). Rejection sets the status to
+`rejected`, soft-deletes the owner's account and emails the reason. Do not
+reject Sunrise Academy — the rest of the tutorial needs it.
+:::
+
+### The owner's first sign-in
+
+<Steps>
+
+1. In the **Owner** profile, open <Route path="/login" />, sign in as
+   `owner@sunrise.example` / `Schola@2026`.
+
+2. You land on the school dashboard at <Route path="/app" />: **Welcome,
+   Laila.** — "Fees, attendance, and people for this school." The sidebar
+   says **Schola · School** and the bottom card **Laila · School Admin**.
+
+3. Read the **Get your school running** checklist: "0 of 8 steps done. Work
+   top to bottom — each step builds on the one before it." The eight steps
+   are: Create the academic year, Add subjects, Create classes, Add sections
+   to each class, Add teachers, Add students, Enroll students in sections,
+   and Take today's attendance. Each step links to its page and ticks itself
+   off as you go. The tiles below show **Students 0**, **Teachers 0**,
+   **Collected this month $0** and **Fees outstanding $0**.
+
+   <Screenshot name="tutorial-owner-first-login" alt="Laila's first view of the Sunrise Academy dashboard with the Get your school running checklist" path="/app" />
+
+4. Click the bell (**Notifications**) in the top bar. The owner normally finds
+   **"Your school is live"** — "Your Schola application has been approved."
+
+</Steps>
+
+## Check your work
+
+- <Route path="/platform/approvals" /> no longer lists Sunrise Academy.
+- The owner signs in and lands on <Route path="/app" />, not on "Your school's
+  application is waiting for approval.".
+- The platform **Dashboard** counts one more **Active** school, and **Recent
+  signups** shows Sunrise Academy with an **Active** tag.
+
+## If something goes wrong
+
+<Aside type="note" title="If the approval email cannot be sent">
+The "approved" email is best-effort: when the email provider fails, the API
+logs it and finishes the approval anyway — the owner's notification and the
+`school.approve` audit entry are still written. Laila can sign in either way;
+the email only tells her she may.
+</Aside>
+
+- **"Cannot approve a school in status "active"."** — someone already approved
+  it (for example in another tab). Nothing to do.
+- **The owner still gets "Your school's application is waiting for
+  approval."** — the approval did not go through. Check the school's status on <Route path="/platform/schools" />.
+- **"Internal Server Error" on sign-in** — the API is restarting (for example
+  after a code change in development). Wait a few seconds and try again.
+
+## Under the hood
+
+- <SourceFile path="apps/web/src/components/platform/schools-directory.tsx" /> — the Approvals and All schools tables and their row menus.
+- <SourceFile path="apps/api/src/modules/schools/schools.service.ts" symbol="approveSchool" /> — roles, status, owner activation, email, notification, audit.
+
+## Learn more
+
+<CardGrid>
+  <LinkCard title="Approvals" description="Approve, reject and the review queue in detail." href="/features/platform/approvals/" />
+  <LinkCard title="School dashboard" description="Every tile and the setup checklist." href="/features/school/dashboard/" />
+</CardGrid>
+
+## Next
+
+<LinkCard title="4. Set up academics" description="School settings, the academic year, subjects, the class and its sections." href="/tutorial/set-up-academics/" />

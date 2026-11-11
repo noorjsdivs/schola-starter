@@ -1,0 +1,241 @@
+---
+title: 8. Fees and payments
+description: As the Accountant, create Grade 1's monthly fee, generate November's invoices, record a cash payment and download its receipt — then let the parent pay online with Stripe Checkout.
+---
+
+import { Aside, Steps, Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+import Pipeline from '../../../components/Pipeline.astro';
+import SourceFile from '../../../components/SourceFile.astro';
+import Api from '../../../components/Api.astro';
+import Perm from '../../../components/Perm.astro';
+import Route from '../../../components/Route.astro';
+import Screenshot from '../../../components/Screenshot.astro';
+
+Money in Schola moves in three steps. A **fee structure** says what the school
+charges ("Grade 1 monthly fee: tuition, lunch, activities"). **Invoices** turn
+it into a bill per student for one period. **Payments** settle the bills —
+recorded at the office, or paid online by the family through Stripe Checkout.
+Every payment gets a receipt PDF.
+
+## What you'll do
+
+<Pipeline
+  caption="From a price list to a receipt."
+  steps={[
+    { label: 'Structure', icon: 'list-format', note: '$310 a month' },
+    { label: 'Invoices', icon: 'file-text', note: 'November, per section' },
+    { label: 'Cash', icon: 'hand-coins', note: 'Leo pays at the office' },
+    { label: 'Receipt', icon: 'receipt', note: 'PDF for the family' },
+    { label: 'Online', icon: 'credit-card', note: 'Sara pays with Stripe' },
+  ]}
+/>
+
+## Before you start
+
+- **Accountant** profile: `accountant@sunrise.example` (Ethan Brooks, given
+  the Accountant role in [chapter 5](/tutorial/add-people/)). A School Admin
+  can do all of this too.
+- **Family** profile: `parent@sunrise.example`.
+- For the online payment: Stripe test keys in your env and `stripe listen`
+  running (`pnpm dev` starts it). See [Stripe](/setup/services/stripe/).
+
+## Steps
+
+### 1. Create the fee structure
+
+<Steps>
+
+1. Sign in as Ethan. His sidebar shows **Finance › Fees** and **Payroll**,
+   plus his own **My attendance** and **My payslips** (he is also staff).
+
+2. Click **Fees**. "Fee structures, invoices, and collected payments." There
+   are three tabs — **Structures**, **Invoices**, **Payments** — and an
+   **Export CSV** button.
+
+3. On **Structures**, click **Add structure**. The **New fee structure** drawer
+   says "A fee the school can invoice."
+
+4. Fill it in:
+
+   | Field | Value |
+   |---|---|
+   | Academic year | **2026-2027 (current)** |
+   | Frequency | **Monthly** (or One-time, Quarterly, Yearly) |
+   | Name | `Grade 1 monthly fee` |
+   | Line items | `Tuition` `250`, then **Add line item** `Lunch` `40`, then **Add line item** `Activities` `20` |
+
+   <Screenshot name="tutorial-fee-structure-form" alt="The New fee structure drawer: Grade 1 monthly fee with Tuition, Lunch and Activities" path="/app/fees" />
+
+5. Click **Save** — **"Fee structure created."** The row shows **Monthly** and
+   a total of **$310.00**.
+
+</Steps>
+
+### 2. Generate November's invoices
+
+<Steps>
+
+1. Click the **Invoices** tab, then **Generate invoices**. The card
+   **Generate invoices for a section** opens (the button turns into
+   **Cancel**).
+
+2. Fill it in:
+
+   | Field | Value |
+   |---|---|
+   | Fee structure | **Grade 1 monthly fee ($310.00)** |
+   | Period key | `2026-11` ("e.g. 2026-06 or 2026-Q1") |
+   | Class | **Grade 1** |
+   | Section | **A** |
+   | Due date | `11/15/2026` |
+
+   <Screenshot name="tutorial-fee-generate" alt="Generate invoices for a section: Grade 1 monthly fee, period 2026-11, Grade 1 A, due 15 November" path="/app/fees" />
+
+3. Click **Generate** — **"Generated 2 invoice(s) (0 already existed)."**
+   Click **Generate invoices** again and repeat for **Section** **B**.
+
+4. The table lists four invoices. Each row shows the **Student** (name and
+   admission number), the **Invoice** number such as `INV-202611-7BB5E5`, the
+   **Period** `2026-11`, **Total** $310.00, **Paid** $0.00, **Status**
+   **Pending**, the **Due** date, and two buttons: **Record** and **Pay**.
+
+   <Screenshot name="tutorial-fee-invoices" alt="Four pending November invoices with Record and Pay buttons" path="/app/fees" />
+
+</Steps>
+
+Generating again for the same structure, period and section skips students who
+already have that invoice, so it is safe to repeat.
+
+### 3. Record a cash payment
+
+<Steps>
+
+1. Click **Record payment** above the table. (**Record** on Leo's row opens
+   the same drawer with his invoice already chosen.) The drawer says "Cash,
+   bank transfer or cheque received at the office. A receipt is issued."
+
+2. In **Student**, type `Leo` in **Search students by name or number** and
+   click **Leo Martins — SUN-2026-002 · Grade 1 · A**. He is pinned at the top
+   with a **Change** link.
+
+3. **Invoice** lists all of his open invoices; pick **INV-202611-7BB5E5 ·
+   2026-11 · remaining $310.00**. **Amount** fills itself with the balance,
+   `310`.
+
+4. Leave **Method** on **Cash** (the others are Bank transfer, Online, Cheque,
+   Other) and type **Reference (optional)** `Front office, cash`.
+
+   <Screenshot name="tutorial-fee-record-payment" alt="The Record payment drawer for Leo Martins: invoice picked, amount 310, method Cash" path="/app/fees" />
+
+5. Click **Record payment** — **"Payment recorded."** Leo's invoice now shows
+   **Paid** $310.00 and status **Paid**.
+
+   <Screenshot name="tutorial-fee-invoices-after-cash" alt="The invoices after the cash payment: Leo Martins paid" path="/app/fees" />
+
+</Steps>
+
+You can also type a smaller amount: the invoice becomes **Partial** and the
+rest stays open.
+
+### 4. Download the receipt
+
+<Steps>
+
+1. Click the **Payments** tab. The row shows the **Receipt** number, when it
+   was **Received**, the **Amount** and the **Method**.
+
+   <Screenshot name="tutorial-fee-payments" alt="The Payments tab with Leo's cash payment and a Download PDF link" path="/app/fees" />
+
+2. Click **Download PDF**. The receipt (`RCT-202611-E86504.pdf` in this run)
+   opens in a new tab.
+
+   <Screenshot name="tutorial-receipt-pdf" alt="The receipt PDF: payment received from Leo Martins, $310.00, balance remaining $0.00" path="/api/v1/fee-payments/…/receipt.pdf" />
+
+</Steps>
+
+The receipt shows the school, the receipt number and date, who paid, the
+invoice, period and method with its reference, each line item, the **Invoice
+total**, **This payment**, **Total paid to date** and **Balance remaining**.
+
+### 5. Pay online as the parent
+
+<Steps>
+
+1. In the **Family** profile, sign in as Sara and open **My children ›
+   Aisha Khan**, then the **Fees** tab. The **Invoices** table lists
+   November's invoice with its **Balance** $310.00 and a **Pay online** button.
+
+   <Screenshot name="tutorial-parent-child-fees" alt="Sara's view of Aisha's fees with the Pay online button" path="/app/children/…?tab=fees" />
+
+2. Click **Pay online**. Schola opens a Stripe Checkout session for the
+   remaining balance and the browser leaves for `checkout.stripe.com`. In test
+   mode the page is marked **Sandbox** and shows "Invoice INV-202611-2D055C"
+   and $310.00. Stripe may also offer the payer's local currency.
+
+3. Type any email, the test card **4242 4242 4242 4242**, any future expiry
+   such as **12 / 34**, any CVC such as **123**, a cardholder name, and click
+   **Pay**.
+
+4. Stripe sends Sara back to Aisha's page with `?checkout=success`. The toast
+   says **"Payment received. The receipt appears here once Stripe confirms
+   it."**
+
+5. A moment later Stripe's `checkout.session.completed` event reaches the API
+   (through `stripe listen` in development). Schola records an **Online**
+   payment with the note "Paid with Stripe Checkout.", issues a receipt and
+   marks the invoice **Paid**. Reload the tab to see it.
+
+</Steps>
+
+<Aside type="caution" title="Steps 3 to 5 were not completed in this run">
+The automated run behind this page reached the Stripe Checkout page (step 2) —
+the checkout session was created and the browser was redirected — but stopped
+there: the hosted page carries Stripe's own bot check, which a script must not
+answer. Steps 3 to 5 describe what the code does
+(<SourceFile path="apps/api/src/modules/stripe/stripe.webhook.ts" /> and
+<SourceFile path="apps/api/src/services/stripe/fulfill.ts" />). When you record
+the video, a person completes the payment normally.
+</Aside>
+
+If Sara clicks the back arrow on Stripe's page instead, she returns with
+`?checkout=cancel` and the toast "Payment cancelled. Nothing was charged."
+
+## Check your work
+
+- The **Invoices** tab shows Leo **Paid** and the other three **Pending** (or
+  Aisha **Paid** too, after a completed Stripe payment).
+- The dashboard's **Collected this month** reads **$310** and **Fees
+  outstanding** **$930**.
+- **Export CSV** downloads `fees-<date>.csv` with one row per invoice:
+  Invoice, Admission, Student, Period, Total, Paid, Waived, Remaining, Status,
+  Due.
+
+## If something goes wrong
+
+- **"This invoice cannot be paid."** — it is already paid, waived or
+  cancelled.
+- **The online payment does not appear** — the webhook did not arrive. Check
+  that `stripe listen` is running and that `STRIPE_WEBHOOK_SECRET` matches it;
+  without the secret the webhook answers `503`. Stripe retries, and fulfilment
+  is idempotent on the Checkout session id.
+- **The student search finds nobody** — the drawer searches name or admission
+  number; try `SUN-2026-002`.
+
+## Under the hood
+
+- <Api method="POST" path="fee-structures" perm="fee_structure:create" /> · <Api method="POST" path="fee-invoices/generate" /> · <Api method="POST" path="fee-payments" perm="fee:collect" />
+- <Api method="GET" path="fee-payments/:id/receipt.pdf" /> — the receipt (`fee.receipt.download` in the audit log).
+- <Api method="POST" path="student-records/:id/invoices/:invoiceId/checkout" /> — a family's Stripe Checkout session (`fee.checkout.open`).
+- <SourceFile path="apps/api/src/services/stripe/fulfill.ts" symbol="fulfillCheckoutSession" /> — turns a paid session into a payment and receipt (`fee.collect`, actor role `stripe`).
+
+## Learn more
+
+<CardGrid>
+  <LinkCard title="Fees" description="Structures, invoices, waivers, payments and receipts." href="/features/finance/fees/" />
+  <LinkCard title="Online payments" description="Stripe Checkout and the webhook in depth." href="/features/finance/online-payments/" />
+  <LinkCard title="Stripe setup" description="Keys, stripe listen and test cards." href="/setup/services/stripe/" />
+</CardGrid>
+
+## Next
+
+<LinkCard title="9. Payroll" description="Salary structures, November's payslips, marking one paid and the payslip PDF." href="/tutorial/payroll/" />
